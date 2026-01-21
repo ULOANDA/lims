@@ -42,18 +42,18 @@ export function OrderDetailModal({ order, onClose, onCreateReceipt }: OrderDetai
                             {order.orderId}
                         </Badge>
                         {order.orderStatus === "Completed" ? (
-                            <Badge variant="default" className="bg-success hover:bg-success/90">
+                            <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-xs">
                                 {t("crm.orders.status.Completed")}
                             </Badge>
                         ) : order.orderStatus === "Pending" ? (
-                            <Badge variant="outline" className="bg-warning/20 text-warning-foreground border-warning-200">
+                            <Badge variant="outline" className="bg-orange-500/20 text-orange-600 border-orange-200 text-xs">
                                 {t("crm.orders.status.Pending")}
                             </Badge>
                         ) : (
                             <Badge variant="outline">{order.orderStatus}</Badge>
                         )}
                         {order.paymentStatus === "Paid" && (
-                            <Badge variant="default" className="bg-primary hover:bg-primary/90">
+                            <Badge variant="default" className="bg-primary hover:bg-primary/90 text-xs">
                                 {t("crm.orders.paymentStatus.Paid")}
                             </Badge>
                         )}

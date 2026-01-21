@@ -42,8 +42,13 @@ export function ReceiptDetailModal({ receipt, onClose, onSampleClick }: ReceiptD
     const [emailForm, setEmailForm] = useState({
         from: "lab@company.com",
         to: receipt.client?.clientEmail || "",
-        subject: `Xác nhận tiếp nhận mẫu - ${receipt.receiptCode}`,
-        content: `Kính gửi ${receipt.client?.clientName},\n\nChúng tôi xác nhận đã tiếp nhận mẫu thử theo thông tin sau:\n- Mã tiếp nhận: ${receipt.receiptCode}\n- Ngày tiếp nhận: ${receipt.receiptDate?.split("T")[0]}\n- Hạn trả kết quả: ${receipt.receiptDeadline?.split("T")[0]}\n\nTrân trọng,\nPhòng thí nghiệm`,
+        subject: t("reception.receiptDetail.emailTemplate.subject", { code: receipt.receiptCode }),
+        content: t("reception.receiptDetail.emailTemplate.content", {
+            clientName: receipt.client?.clientName,
+            receiptCode: receipt.receiptCode,
+            receiptDate: receipt.receiptDate?.split("T")[0],
+            deadline: receipt.receiptDeadline?.split("T")[0],
+        }),
         attachments: [] as string[],
     });
 
@@ -87,13 +92,13 @@ export function ReceiptDetailModal({ receipt, onClose, onSampleClick }: ReceiptD
                 );
             case "Approved":
                 return (
-                    <Badge variant="default" className="bg-success hover:bg-success/90 text-xs">
+                    <Badge variant="default" className="bg-green-600 hover:bg-green-700 dark:bg-green-700 text-xs">
                         {t("lab.analyses.status.Approved")}
                     </Badge>
                 );
             case "Review":
                 return (
-                    <Badge variant="default" className="bg-warning hover:bg-warning/90 text-xs">
+                    <Badge variant="default" className="bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 text-xs">
                         {t("lab.analyses.status.Review")}
                     </Badge>
                 );

@@ -208,7 +208,7 @@ export function SampleDetailModal({ sample, receipt, onClose, onSave }: SampleDe
                         <div className="flex items-center justify-between mb-2">
                             <h3 className="font-semibold text-foreground">{t("reception.sampleDetail.analysisList")}</h3>
                         </div>
-                        <div className="bg-background border border-border rounded-lg overflow-hidden">
+                        <div className="bg-background border border-border rounded-lg overflow-hidden overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-muted/50 border-b border-border">
                                     <tr>
@@ -258,7 +258,12 @@ export function SampleDetailModal({ sample, receipt, onClose, onSave }: SampleDe
                                             <td className="px-3 py-2 text-foreground">{analysis.analysisResult || "-"}</td>
                                             <td className="px-3 py-2 text-center">
                                                 {isEditing && (
-                                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600" onClick={() => handleDeleteAnalysis(index)}>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                        onClick={() => handleDeleteAnalysis(index)}
+                                                    >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 )}
@@ -269,7 +274,7 @@ export function SampleDetailModal({ sample, receipt, onClose, onSave }: SampleDe
                             </table>
                             {isEditing && (
                                 <div className="p-2 border-t border-border bg-muted/30">
-                                    <Button variant="outline" size="sm" className="w-full text-xs flex items-center justify-center gap-1 bg-background" onClick={handleAddAnalysis}>
+                                    <Button variant="outline" size="sm" className="w-full text-xs flex items-center justify-center gap-1 bg-background hover:bg-muted" onClick={handleAddAnalysis}>
                                         <Plus className="h-3 w-3" />
                                         {t("reception.sampleDetail.addAnalysis")}
                                     </Button>
@@ -289,9 +294,9 @@ export function SampleDetailModal({ sample, receipt, onClose, onSave }: SampleDe
                                 </Button>
                             )}
                         </div>
-                        <div className="bg-background border border-border rounded-lg overflow-hidden">
+                        <div className="bg-background border border-border rounded-lg overflow-hidden overflow-x-auto">
                             {attachedFiles.length > 0 ? (
-                                <table className="min-w-full divide-y divide-gray-200">
+                                <table className="min-w-full divide-y divide-border">
                                     <thead className="bg-muted/50">
                                         <tr>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("common.fileName")}</th>
@@ -325,7 +330,7 @@ export function SampleDetailModal({ sample, receipt, onClose, onSave }: SampleDe
                                                             <Download className="h-4 w-4" />
                                                         </Button>
                                                         {isEditing && (
-                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600">
+                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive">
                                                                 <Trash2 className="h-4 w-4" />
                                                             </Button>
                                                         )}

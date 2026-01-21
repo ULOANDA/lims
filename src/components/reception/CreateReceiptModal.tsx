@@ -521,7 +521,7 @@ export function CreateReceiptModal({ onClose, order }: CreateReceiptModalProps) 
                                         {/* Analyses Table */}
                                         <div className="mt-3">
                                             <Label className="text-xs text-muted-foreground mb-2 block">{t("reception.createReceipt.analysisList")}</Label>
-                                            <div className="bg-background rounded-md border border-border overflow-hidden">
+                                            <div className="bg-background rounded-md border border-border overflow-hidden overflow-x-auto">
                                                 <table className="w-full text-sm">
                                                     <thead className="bg-muted/50 border-b border-border">
                                                         <tr>
