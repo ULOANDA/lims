@@ -1,4 +1,63 @@
 export default {
+    nav:{
+        receptionTitle:"Tiếp nhận mẫu",
+        receptionDescription:"Quản lý phiếu & mẫu",
+
+        technicianTitle:"Bàn làm việc KTV",
+        technicianDescription:"Công việc kiểm nghiệm",
+
+        managerTitle:"Quản lý Lab",
+        managerDescription:"Duyệt KQ & Báo cáo",
+
+        assignmentTitle:"Phân công KTV",
+        assignmentDescription:"Phân công chỉ tiêu",
+
+        handOverTitle:"Bàn giao",
+        handOverDescription:"Bàn giao liên phòng",
+
+        storedSamplesTitle:"Mẫu lưu",
+        storedSamplesDescription:"Kho mẫu lưu",
+
+        libraryTitle:"Thư viện",
+        libraryDescription:"Danh mục hệ thống",
+
+        parameterTitle:"Chỉ tiêu",
+        parameterDescription:"Thư viện chỉ tiêu",
+
+        protocolsTitle:"Phương pháp",
+        protocolsDescription:"Thư viện phương pháp",
+
+        matricesTitle:"Nền mẫu",
+        matricesDescription:"Thư viện nền mẫu",
+
+        sampleTypesTitle:"Loại mẫu",
+        sampleTypesDescription:"Thư viện loại mẫu",
+
+        parameterGroupsTitle:"Nhóm chỉ tiêu",
+        parameterGroupsDescription:"Thư viện nhóm chỉ tiêu",
+
+        documentTitle:"Tài liệu",
+        documentDescription:"Văn bản & Biểu mẫu",
+
+        inventoryTitle:"Kho & Tài sản",
+        inventoryDescription:"Hóa chất & Thiết bị",
+        
+        hrTitle:"Nhân sự",
+        hrDescription:"Quản lý nhân viên",
+        sidebar: {
+            title: "LIMS Lab",
+            description: "Quản lý phòng lab",
+            collapse:"Thu gọn",
+            expand:"Mở rộng",
+            language: "Ngôn ngữ",
+            langVi: "Tiếng Việt",
+            langEn: "Tiếng Anh",
+            theme: "Chế độ",
+            themeLight: "Sáng",
+            themeDark: "Tối",
+            themeSystem:"Hệ thống",
+        }
+    },
     notifications: {
         title: "Thông báo",
         markAllRead: "Đánh dấu tất cả đã đọc",
@@ -20,9 +79,12 @@ export default {
         back: "Quay lại",
         edit: "Chỉnh sửa",
         save: "Lưu",
+        saving: "Đang lưu",
+        select: "Lựa chọn",
         cancel: "Hủy",
         delete: "Xóa",
         add: "Thêm",
+        create: "Tạo mới",
         search: "Tìm kiếm...",
         filter: "Lọc",
         export: "Xuất",
@@ -54,6 +116,17 @@ export default {
         deletedAt: "Ngày xóa",
         status: "Trạng thái",
         note: "Ghi chú",
+        pagination: {
+            itemsPerPagePrefix: "Hiển thị",
+            itemsPerPageSuffix: "/ trang",
+            itemsPerPageAria: "Số dòng mỗi trang",
+            range: "{{start}}-{{end}} trên tổng {{total}}",
+            firstPage: "Trang đầu",
+            prevPage: "Trang trước",
+            nextPage: "Trang sau",
+            lastPage: "Trang cuối",
+            page: "Trang {{page}}"
+          }
     },
     theme: {
         light: "Sáng",
@@ -151,6 +224,8 @@ export default {
     },
     library: {
         matrices: {
+            title:"Danh sách cấu hình",
+            total: "Tổng số: {{count}} cấu hình",
             matrixId: "Mã cấu hình (Matrix ID)",
             parameterId: "Mã chỉ tiêu",
             protocolId: "Mã phương pháp",
@@ -168,12 +243,37 @@ export default {
             thresholdLimit: "Ngưỡng quy chuẩn (GHK)",
             turnaroundTime: "Thời gian trả kết quả (Ngày)",
             technicianGroupId: "Tổ kỹ thuật phụ trách",
+            searchPlaceholder: "Tìm kiếm cấu hình...",
+            create: {
+                title: "Tạo mới cấu hình",
+                sampleParameter: "Chỉ tiêu/Mẫu",
+                protocol: "Phương pháp",
+                pricing: "Đơn giá",
+                limits: "Ngưỡng/Giới hạn"
+            },
+            detail:{
+                title: "Chi tiết cấu hình",
+                sampleParameter: "Chỉ tiêu/Mẫu",
+                protocol: "Phương pháp",
+                pricing: "Đơn giá",
+                limits: "Ngưỡng/Giới hạn",
+                information: "Thông tin thêm",
+            },
+            edit:{
+                title:"Chỉnh sửa cấu hình",
+            },
+           cofirmDelete: "Chắc chắn muốn xóa cấu hình này?"
         },
         protocols: {
             protocolId: "ID Phương pháp",
             protocolCode: "Mã hiệu tiêu chuẩn (SOP)",
             protocolSource: "Tổ chức ban hành",
-            protocolAccreditation: "Chứng nhận năng lực",
+            protocolAccreditation:{
+                title: "Chứng nhận năng lực",
+                vilas: "VILAS",
+                tdc: "TDC",
+            },
+            protocolCreateAt: "Ngày tạo",
             title: "Danh sách phương pháp",
             total: "Tổng số: {{count}} phương pháp",
             searchPlaceholder: "Tìm kiếm phương pháp...",
@@ -183,6 +283,18 @@ export default {
                 group: "Nhóm",
                 executionTime: "Thời gian thực hiện",
                 actions: "Hành động",
+            },
+            create: {
+                title: "Tạo phương pháp",
+                protocolCode: "Mã hiệu tiêu chuẩn (SOP)",
+                protocolCodePlaceholder: "Nhập mã phương pháp",
+                protocolSource: "Tổ chức ban hành",
+                protocolSourcePlaceholder: "Nhập tổ chức ban hành",
+                protocolAccreditation:{
+                    title: "Chứng nhận năng lực",
+                    vilas: "VILAS",
+                    tdc: "TDC",
+                },
             },
             detail: {
                 generalInfo: "Thông tin chung",
@@ -203,6 +315,12 @@ export default {
             total: "Tổng số: {{count}} chỉ tiêu",
             searchPlaceholder: "Tìm kiếm chỉ tiêu...",
             allGroups: "Tất cả nhóm",
+            create:{
+                title: "Tạo mới chỉ tiêu",
+                parameterNamePlaceholder: "Nhập tên chỉ tiêu",
+                technicianAliasPlaceholder: "Nhập tên gọi nội bộ",
+                createSuccess:"Tạo mới chỉ tiêu thành công",
+            },
             columns: {
                 code: "Mã",
                 name: "Tên chỉ tiêu",
@@ -212,23 +330,64 @@ export default {
             detail: {
                 matrices: "Matrices",
                 matrixCode: "Mã Matrix",
+                feeBeforeTax: "Phí trước thuế",
                 feeAfterTax: "Phí sau thuế",
                 lod: "LOD",
                 loq: "LOQ",
             },
         },
         sampleTypes: {
+            title: "Danh sách loại mẫu",
+            total: "Tổng số: {{count}} loại mẫu",
             sampleTypeId: "ID Loại mẫu",
             sampleTypeName: "Tên nhóm mẫu / Sản phẩm",
             displayTypeStyle: "Tên hiển thị đa ngữ",
+            searchPlaceholder: "Tìm kiếm loại mẫu...",
+            table:{
+                sampleTypeId: "ID Loại mẫu",
+                sampleTypeName: "Tên loại mẫu",
+                displayTypeStyle: "Tên hiển thị đa ngữ",
+                createAt: "Ngày tạo",
+            },
+            create: {
+                title: "Tạo loại mẫu",
+                sampleTypeName: "Tên loại mẫu",
+                sampleTypeNamePlaceholder: "Nhập tên loại mẫu",
+                displayDefault: "Tên hiển thị mặc định",
+                displayDefaultPlaceholder: "Nhập tên hiển thị mặc định",
+                displayEng: "Tên hiển thị anh ngữ",
+                displayEngPlaceholder: "Nhập tên hiển thị anh ngữ",
+            },
+            createSuccess: "Tạo loại mẫu thành công",
         },
         parameterGroups: {
+            title: "Danh sách nhóm chỉ tiêu",
+            total: "Tổng số: {{count}} nhóm",
             groupId: "Mã gói kiểm nghiệm",
             groupName: "Tên gói / Nhóm chỉ tiêu",
+            sampleType: "Loại mẫu",
             matrixIds: "Danh sách chỉ tiêu trong gói",
             feeBeforeTaxAndDiscount: "Giá gốc gói",
+            feeBeforeTax:"Đơn giá (Chưa thuế)",
             discountRate: "Giảm giá gói (%)",
             feeAfterTax: "Giá gói sau thuế",
+            searchPlaceholder: "Tìm kiếm nhóm...",
+            create: {
+                title: "Tạo nhóm chi tiết",
+                groupName: "Nhóm chi tiết",
+                groupNamePlaceholder: "Nhập tên nhóm chi tiết",
+                matrices: "Danh sách cấu hình",
+                matricesPlaceholder: "Chọn cấu hình",
+                matricesSearchPlaceholder: "Nhập cấu hình tìm kiếm",
+                sampleType: "Loại mẫu",
+                feeBeforeTaxAndDiscount: "Giá gốc gói",
+                discountRate: "Giảm giá gói (%)",
+                feeBeforeTax:"Đơn giá (Chưa thuế)",
+                taxRate: "Thuế suất (%)",
+                feeAfterTax: "Giá gói sau thuế",
+                groupNote: "Ghi chú",
+                groupNotePlaceholder: "Nhập ghi chú",
+            }
         },
     },
     lab: {
@@ -275,6 +434,7 @@ export default {
             receiptId: "Thuộc phiếu nhận",
             sampleTypeId: "Loại nền mẫu",
             productType: "Nhóm sản phẩm",
+            sampleName: "Tên mẫu",
             sampleTypeName: "Tên loại mẫu",
             sampleClientInfo: "Tên/Ký hiệu mẫu (Khách hàng)",
             sampleInfo: "Thông tin mẫu",
@@ -316,6 +476,12 @@ export default {
             analysisUnit: "Đơn vị tính",
             analysisLocation: "Phòng thí nghiệm thực hiện",
             qaReview: "Duyệt kết quả (QA/QC)",
+           status: {
+            Pending: "Chờ xử lý",
+            Testing: "Đang thực hiện",   
+            Review: "Đang xem xét",       
+            Approved: "Đã phê duyệt",     
+           },
         },
         equipment: {
             equipmentId: "ID Hệ thống",
@@ -429,6 +595,11 @@ export default {
             removeSample: "Xóa mẫu",
             createButton: "Tạo phiếu tiếp nhận",
             cancelButton: "Hủy",
+            waybill: "Vận đơn",
+            dueDate: "Hạn trả",
+            contact: "Liên hệ",
+            sample: "Mẫu",
+            actions: "Thao tác",
         },
         receiptDetail: {
             title: "Chi tiết phiếu tiếp nhận: {{code}}",

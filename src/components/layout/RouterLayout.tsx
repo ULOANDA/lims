@@ -1,64 +1,170 @@
-import { useNavigate, useLocation, Outlet } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Layout } from "./Layout";
-import { useEffect, useState } from "react";
 
-// Map Routes to Tab Keys (ensure these match Sidebar keys)
-const ROUTE_TO_TAB: Record<string, string> = {
-    "/reception": "reception",
-    "/technician": "technician",
-    "/manager": "manager",
-    "/assignment": "assignment",
-    "/handover": "handover",
-    "/stored-samples": "stored-samples",
-    "/library": "library",
-    "/protocols": "protocols",
-    "/document": "document",
-    "/inventory": "inventory",
-    "/hr": "hr",
-};
+type TabKey =
+  | "reception"
+  | "technician"
+  | "manager"
+  | "assignment"
+  | "handover"
+  | "stored-samples"
+  | "document"
+  | "inventory"
+  | "hr"
+  | "library-parameters"
+  | "library-protocols"
+  | "library-matrices"
+  | "library-sample-types"
+  | "library-parameter-groups";
 
-const TAB_INFO: Record<string, { title: string; description: string }> = {
-    reception: { title: "Tiếp nhận mẫu", description: "Quản lý phiếu tiếp nhận và mẫu" },
-    technician: { title: "KTV Workspace", description: "Công việc kiểm nghiệm viên" },
-    manager: { title: "Quản lý Lab", description: "Duyệt kết quả & quản lý đầu ra" },
-    assignment: { title: "Phân công KTV", description: "Phân công kiểm nghiệm viên" },
-    handover: { title: "Bàn giao", description: "Bàn giao mẫu và phép thử" },
-    "stored-samples": { title: "Mẫu lưu", description: "Quản lý mẫu đã lưu trữ" },
-    library: { title: "Thư viện chỉ tiêu", description: "Danh sách chỉ tiêu" },
-    protocols: { title: "Thư viện phương pháp", description: "Danh sách phương pháp" },
-    document: { title: "Tài liệu", description: "Quản lý tài liệu" },
-    inventory: { title: "Kho & Tài sản", description: "Hóa chất, thiết bị, vật tư" },
-    hr: { title: "Quản lý Nhân sự", description: "Quản lý thông tin nhân sự" },
-};
+type TabInfo = { title: string; description: string };
+
+function getTabFromPath(pathname: string): TabKey {
+  if (pathname.startsWith("/library")) {
+    if (pathname.startsWith("/library/protocols")) return "library-protocols";
+    if (pathname.startsWith("/library/matrices")) return "library-matrices";
+    if (pathname.startsWith("/library/sample-types")) return "library-sample-types";
+    if (pathname.startsWith("/library/parameter-groups")) return "library-parameter-groups";
+    return "library-parameters";
+  }
+
+  switch (pathname) {
+    case "/reception":
+      return "reception";
+    case "/technician":
+      return "technician";
+    case "/manager":
+      return "manager";
+    case "/assignment":
+      return "assignment";
+    case "/handover":
+      return "handover";
+    case "/stored-samples":
+      return "stored-samples";
+    case "/document":
+      return "document";
+    case "/inventory":
+      return "inventory";
+    case "/hr":
+      return "hr";
+    default:
+      return "reception";
+  }
+}
+
+function getRouteFromTab(tab: TabKey): string {
+  switch (tab) {
+    case "library-parameters":
+      return "/library/parameters";
+    case "library-protocols":
+      return "/library/protocols";
+    case "library-matrices":
+      return "/library/matrices";
+    case "library-sample-types":
+      return "/library/sample-types";
+    case "library-parameter-groups":
+      return "/library/parameter-groups";
+    default:
+      return `/${tab}`;
+  }
+}
 
 export function RouterLayout() {
-    const navigate = useNavigate();
-    const location = useLocation();
-    const [activeTab, setActiveTab] = useState("reception");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { t } = useTranslation();
 
-    useEffect(() => {
-        // Find tab that matches current path (simple check)
-        const path = location.pathname;
-        const matchedTab = ROUTE_TO_TAB[path] || "reception";
-        setActiveTab(matchedTab);
-    }, [location]);
+  const activeTab = useMemo<TabKey>(
+    () => getTabFromPath(location.pathname),
+    [location.pathname],
+  );
 
-    const handleTabChange = (tab: string) => {
-        // Find route for tab
-        const route = Object.keys(ROUTE_TO_TAB).find((key) => ROUTE_TO_TAB[key] === tab);
-        if (route) {
-            navigate(route);
-        } else {
-            // Fallback or external link
-            console.warn("No route found for tab:", tab);
-        }
-    };
+  const TAB_INFO = useMemo<Record<TabKey, TabInfo>>(
+    () => ({
+      reception: {
+        title: t("nav.receptionTitle"),
+        description: t("nav.receptionDescription"),
+      },
+      technician: {
+        title: t("nav.technicianTitle"),
+        description: t("nav.technicianDescription"),
+      },
+      manager: {
+        title: t("nav.managerTitle"),
+        description: t("nav.managerDescription"),
+      },
+      assignment: {
+        title: t("nav.assignmentTitle"),
+        description: t("nav.assignmentDescription"),
+      },
+      handover: {
+        title: t("nav.handOverTitle"),
+        description: t("nav.handOverDescription"),
+      },
+      "stored-samples": {
+        title: t("nav.storedSamplesTitle"),
+        description: t("nav.storedSamplesDescription"),
+      },
 
-    const info = TAB_INFO[activeTab] || { title: "Dashboard", description: "Hệ thống LIMS" };
+      "library-parameters": {
+        title: t("nav.parameterTitle"),
+        description: t("nav.parameterDescription"),
+      },
+      "library-protocols": {
+        title: t("nav.protocolsTitle"),
+        description: t("nav.protocolsDescription"),
+      },
+      "library-matrices": {
+        title: t("nav.matricesTitle"),
+        description: t("nav.matricesDescription"),
+      },
+      "library-sample-types": {
+        title: t("nav.sampleTypesTitle"),
+        description: t("nav.sampleTypesDescription"),
+      },
+      "library-parameter-groups": {
+        title: t("nav.parameterGroupsTitle"),
+        description: t("nav.parameterGroupsDescription"),
+      },
 
-    return (
-        <Layout activeTab={activeTab} onTabChange={handleTabChange} title={info.title} description={info.description}>
-            <Outlet />
-        </Layout>
-    );
+      document: {
+        title: t("nav.documentTitle"),
+        description: t("nav.documentDescription"),
+      },
+      inventory: {
+        title: t("nav.inventoryTitle"),
+        description: t("nav.inventoryDescription"),
+      },
+      hr: {
+        title: t("nav.hrTitle"),
+        description: t("nav.hrDescription"),
+      },
+    }),
+    [t],
+  );
+
+  const info =
+    TAB_INFO[activeTab] ??
+    ({
+      title: t("nav.dashboard.title"),
+      description: t("nav.dashboard.description"),
+    } satisfies TabInfo);
+
+  const handleTabChange = (tab: string) => {
+    const next = tab as TabKey;
+    navigate(getRouteFromTab(next));
+  };
+
+  return (
+    <Layout
+      activeTab={activeTab}
+      onTabChange={handleTabChange}
+      title={info.title}
+      description={info.description}
+    >
+      <Outlet />
+    </Layout>
+  );
 }

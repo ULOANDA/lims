@@ -1,4 +1,64 @@
 export default {
+    nav: {
+        receptionTitle: "Sample Reception",
+        receptionDescription: "Manage receipts & Samples",
+      
+        technicianTitle: "KTV Workspace",
+        technicianDescription: "Testing work",
+      
+        managerTitle: "Lab Management",
+        managerDescription: "Review results & Reports",
+      
+        assignmentTitle: "Technician Assignment",
+        assignmentDescription: "Assign Parameters",
+      
+        handOverTitle: "Handover",
+        handOverDescription: "Inter-department Handover",
+      
+        storedSamplesTitle: "Stored Samples",
+        storedSamplesDescription: "Sample Storage",
+
+        libraryTitle: "Library",
+        LibraryDescription: "System Library",
+      
+        parameterTitle: "Parameters",
+        parameterDescription: "Parameter Library",
+      
+        protocolsTitle: "Methods",
+        protocolsDescription: "Method Library",
+      
+        matricesTitle: "Matrices",
+        matricesDescription: "Matrix Library",
+      
+        sampleTypesTitle: "Sample Types",
+        sampleTypesDescription: "Sample Type Library",
+      
+        parameterGroupsTitle: "Parameter Groups",
+        parameterGroupsDescription: "Parameter Group Library",
+      
+        documentTitle: "Documents",
+        documentDescription: "Forms & Templates",
+      
+        inventoryTitle: "Inventory & Assets",
+        inventoryDescription: "Chemicals & Equipment",
+      
+        hrTitle: "Human Resources",
+        hrDescription: "Employee Management",
+        sidebar: {
+            title: "LIMS Lab",
+            description: "Lab Management",
+            collapse:"Collapsed",
+            expand:"Expanded",
+            language: "Language",
+            langVi: "Vietnamese",
+            langEn: "English",
+            theme: "Theme",
+            themeLight: "Light",
+            themeDark: "Dark",
+            themeSystem:"System",
+        }
+      },
+      
     notifications: {
         title: "Notifications",
         markAllRead: "Mark all as read",
@@ -20,9 +80,12 @@ export default {
         back: "Back",
         edit: "Edit",
         save: "Save",
+        saving: "Saving",
+        select: "Select",
         cancel: "Cancel",
         delete: "Delete",
         add: "Add",
+        create: "Create",
         search: "Search...",
         filter: "Filter",
         export: "Export",
@@ -54,6 +117,18 @@ export default {
         deletedAt: "Deleted At",
         status: "Status",
         note: "Note",
+        pagination: {
+            itemsPerPagePrefix: "Show",
+            itemsPerPageSuffix: " / page",
+            itemsPerPageAria: "Rows per page",
+            range: "{{start}}-{{end}} of {{total}}",
+            firstPage: "First page",
+            prevPage: "Previous page",
+            nextPage: "Next page",
+            lastPage: "Last page",
+            page: "Page {{page}}",
+          },
+          
     },
     theme: {
         light: "Light",
@@ -151,6 +226,8 @@ export default {
     },
     library: {
         matrices: {
+            title: "Matrix List",
+            total: "Total: {{count}} matrices",
             matrixId: "Matrix Configuration ID",
             parameterId: "Parameter ID",
             protocolId: "Protocol ID",
@@ -168,12 +245,37 @@ export default {
             thresholdLimit: "Standard Threshold",
             turnaroundTime: "Turnaround Time (Days)",
             technicianGroupId: "Responsible Tech Group",
+            searchPlaceholder: "Search Matrices...",
+            create: {
+                title: "Create New Matrix",
+                sampleParameter: "Parameter/Sample",
+                protocol: "Protocol",
+                pricing: "Pricing",
+                limits: "Limits"
+            },
+            detail:{
+                title: "Matrix Detail",
+                sampleParameter: "Parameter/Sample",
+                protocol: "Protocol",
+                pricing: "Pricing",
+                limits: "Limits",
+                information: "Information",
+            },
+            edit:{
+                title:"Edit Matrix",
+            },
+           cofirmDelete: "Are you sure you want to delete this matrix?"
         },
         protocols: {
             protocolId: "Protocol ID",
             protocolCode: "Standard Code (SOP)",
             protocolSource: "Issuing Organization",
-            protocolAccreditation: "Competence Certification",
+            protocolAccreditation:{
+                title: "Competence Certification",
+                vilas: "VILAS",
+                tdc: "TDC",
+            },
+            protocolCreateAt: "Created At",
             title: "Protocol List",
             total: "Total: {{count}} protocols",
             searchPlaceholder: "Search protocols...",
@@ -183,6 +285,18 @@ export default {
                 group: "Group",
                 executionTime: "Execution Time",
                 actions: "Actions",
+            },
+            create: {
+                title: "Create New Protocols",
+                protocolCode: "Standard Code (SOP)",
+                protocolCodePlaceholder: "Enter Protocol Code",
+                protocolSource: "Issuing Organization",
+                protocolSourcePlaceholder: "Enter Issuing Organization",
+                protocolAccreditation:{
+                    title: "Competence Certification",
+                    vilas: "VILAS",
+                    tdc: "TDC",
+                },
             },
             detail: {
                 generalInfo: "General Info",
@@ -203,6 +317,12 @@ export default {
             total: "Total: {{count}} parameters",
             searchPlaceholder: "Search parameters...",
             allGroups: "All Groups",
+            create:{
+                title: "Create New Parameter",
+                parameterNamePlaceholder: "Enter Parameter Name",
+                technicianAliasPlaceholder: "Enter Internal Alias",
+                createSuccess:"Create Parameter Successfully",
+            },
             columns: {
                 code: "Code",
                 name: "Parameter Name",
@@ -212,23 +332,64 @@ export default {
             detail: {
                 matrices: "Matrices",
                 matrixCode: "Matrix Code",
+                feeBeforeTax: "Fee (Pre-tax)",
                 feeAfterTax: "Fee (Post-tax)",
                 lod: "LOD",
                 loq: "LOQ",
             },
         },
         sampleTypes: {
+            title: "Sample Type List",
+            total: "Total: {{count}} sample types",
             sampleTypeId: "Sample Type ID",
             sampleTypeName: "Sample Group / Product",
             displayTypeStyle: "Multilingual Display Name",
+            searchPlaceholder: "Search sample types...",
+            table:{
+                sampleTypeId: "SampleType ID",
+                sampleTypeName: "SampleType Name",
+                displayTypeStyle: "Multilingual Display Name",
+                createAt: "Created At",
+            },
+            create: {
+                title: "Create New SampleType",
+                sampleTypeName: "SampleType Name",
+                sampleTypeNamePlaceholder: "Enter SampleType Name",
+                displayDefault: "Name Display Default",
+                displayDefaultPlaceholder: "Enter Name Display Default",
+                displayEng: "English Name",
+                displayEngPlaceholder: "Enter English Name",
+            },
+            createSuccess: "Create SampleType Successfully",
         },
         parameterGroups: {
+            title: "Parameter Group List",
+            total: "Total: {{count}} parameter groups",
             groupId: "Test Package Code",
             groupName: "Package Name / Parameter Group",
+            sampleType: "SampleType",
             matrixIds: "Parameters in Package",
             feeBeforeTaxAndDiscount: "Original Package Price",
+            feeBeforeTax:"Package Price (Pre-tax)",
             discountRate: "Package Discount (%)",
             feeAfterTax: "Package Price (Post-tax)",
+            searchPlaceholder: "Search parameter groups...",
+            create: {
+                title: "Create New Parameter Group",
+                groupName: "Package Name",
+                groupNamePlaceholder: "Enter Package Name",
+                matrices: "Matrices",
+                matricesPlaceholder: "Select Matrices",
+                matricesSearchPlaceholder: "Search Matrices",
+                sampleType: "SampleType",
+                feeBeforeTaxAndDiscount: "Original Package Price",
+                discountRate: "Package Discount (%)",
+                feeBeforeTax:"Package Price (Pre-tax)",
+                taxRate: "Tax Rate (%)",
+                feeAfterTax: "Package Price (Post-tax)",
+                groupNote: "Group Note",
+                groupNotePlaceholder: "Enter Group Note",
+            }
         },
     },
     lab: {
@@ -275,6 +436,7 @@ export default {
             receiptId: "Belongs to Receipt",
             sampleTypeId: "Sample Matrix Type",
             productType: "Product Group",
+            sampleName: "Sample Name",
             sampleTypeName: "Sample Type Name",
             sampleClientInfo: "Sample Name/Ref (Client)",
             sampleInfo: "Sample Info",
@@ -316,6 +478,12 @@ export default {
             analysisUnit: "Unit",
             analysisLocation: "Performing Lab",
             qaReview: "Result Approval (QA/QC)",
+            status: {
+                Pending: "Pending",
+                Testing: "Testing",   
+                Review: "Review",       
+                Approved: "Approved",     
+               },
         },
         equipment: {
             equipmentId: "System ID",
@@ -429,6 +597,11 @@ export default {
             removeSample: "Remove Sample",
             createButton: "Create Receipt",
             cancelButton: "Cancel",
+            waybill: "Waybill",
+            dueDate: "Due Date",
+            contact: "Contact Person",
+            sample: "Sample",
+            actions: "Actions",
         },
         receiptDetail: {
             title: "Receipt Detail: {{code}}",
