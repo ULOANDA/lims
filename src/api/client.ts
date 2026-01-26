@@ -1,4 +1,3 @@
-// src/api/client.ts
 import axios, { AxiosHeaders } from "axios";
 import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from "axios";
 import Cookies from "js-cookie";

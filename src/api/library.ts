@@ -1,4 +1,3 @@
-// src/api/library/index.ts
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -342,13 +341,18 @@ export const libraryKeys = {
     [...libraryKeys.parameterGroups(), "list", stableKey(input ?? {})] as const,
 };
 
-export function useMatricesList(input?: { query?: ListQuery; sort?: ListSort }) {
+export function useMatricesList(
+  input?: { query?: ListQuery; sort?: ListSort },
+  opts?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: libraryKeys.matricesList(input),
     queryFn: async () => assertSuccessWithMeta(await libraryApi.matrices.list(input)),
     placeholderData: keepPreviousData,
+    enabled: opts?.enabled ?? true,
   });
 }
+
 
 export function useMatrixDetail(input: { params: { matrixId: string } }) {
   return useQuery({

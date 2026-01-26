@@ -26,7 +26,7 @@ export function ParameterDetailPanel(props: Props) {
   const unit = selected.displayStyleResolved.unit ?? t("common.noData");
 
   return (
-    <div className="w-fit bg-background rounded-lg border border-border p-4 space-y-4">
+    <div className="w-xl shrink-0 bg-background rounded-lg border border-border p-4 space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-lg font-semibold text-foreground">

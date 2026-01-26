@@ -1,4 +1,3 @@
-// src/components/library/parameters/ParametersView.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
@@ -135,30 +134,36 @@ export function ParametersView() {
     [pageParameters]
   );
 
-  const selectedMatrixSearch = selectedParameter?.parameterId ?? null;
+  const selectedParameterId = selectedParameter?.parameterId ?? null;
 
-  const selectedMatricesInput = useMemo(
-    () => ({
-      query: { page: 1, itemsPerPage: 200, search: selectedMatrixSearch },
-      sort: { column: "createdAt", direction: "DESC" as const },
-    }),
-    [selectedMatrixSearch]
-  );
+const selectedMatricesInput = useMemo(
+  () => ({
+    query: {
+      page: 1,
+      itemsPerPage: 10,
+      parameterId: selectedParameterId,
+      search: null,
+    },
+    sort: { column: "createdAt", direction: "DESC" as const },
+  }),
+  [selectedParameterId]
+);
 
-  const selectedMatricesQ = useMatricesList(selectedMatricesInput);
+const selectedMatricesQ = useMatricesList(selectedMatricesInput, {
+  enabled: Boolean(selectedParameterId),
+});
 
-  useEffect(() => {
-    if (!selectedParameter) return;
+useEffect(() => {
+  if (!selectedParameterId) return;
 
-    const mats = (selectedMatricesQ.data?.data ?? []) as unknown as Matrix[];
+  const mats = (selectedMatricesQ.data?.data ?? []) as unknown as Matrix[];
 
-    setSelectedParameter((prev) => {
-      if (!prev) return prev;
-      if (prev.parameterId !== selectedParameter.parameterId) return prev;
-      return { ...prev, matrices: mats };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMatricesQ.data, selectedParameter?.parameterId]);
+  setSelectedParameter((prev) => {
+    if (!prev) return prev;
+    if (prev.parameterId !== selectedParameterId) return prev;
+    return { ...prev, matrices: mats };
+  });
+}, [selectedMatricesQ.data, selectedParameterId]);
 
   const createParam = useCreateParameter();
 

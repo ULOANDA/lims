@@ -1,4 +1,3 @@
-// src/components/library/hooks/useServerPagination.ts
 import { useMemo, useState } from "react";
 
 export function useServerPagination(
