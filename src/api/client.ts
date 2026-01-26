@@ -1,186 +1,198 @@
-import axios from "axios";
-import type { AxiosInstance, AxiosResponse } from "axios";
+import axios, { AxiosHeaders } from "axios";
+import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from "axios";
 import Cookies from "js-cookie";
 import { toast } from "sonner";
 
-// Define the standard response format
-export interface ApiResponse<T = any> {
-    success: boolean;
-    statusCode: number;
-    data?: T;
-    meta?: {
-        page: number;
-        total: number;
-        [key: string]: any;
-    };
-    error?: {
-        code: string;
-        message: string;
-        traceId?: string;
-        [key: string]: any;
-    };
+export type ApiMeta = {
+  page: number;
+  itemsPerPage: number;
+  total: number;
+  totalPages: number;
+  [key: string]: unknown;
+};
+
+export type ApiError = {
+  code: string;
+  message: string;
+  traceId?: string;
+  [key: string]: unknown;
+};
+
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  statusCode: number;
+  data?: T;
+  meta?: ApiMeta | null;
+  error?: ApiError | null;
 }
 
-// Environment variables
-const BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-const APP_UID = import.meta.env.VITE_APP_UID || "lims-core";
-const ACCESS_KEY = import.meta.env.VITE_ACCESS_KEY || "";
 
-// Create Axios instance
+export interface RequestParams<TBody = unknown, TQuery = Record<string, unknown>> {
+  headers?: Record<string, string>;
+  body?: TBody;
+  params?: Record<string, unknown>;
+  query?: TQuery;
+}
+
+const BASE_URL = (import.meta.env.VITE_BACKEND_URL as string | undefined) || "http://localhost:3000";
+const APP_UID = (import.meta.env.VITE_APP_UID as string | undefined) || "lims-core";
+const ACCESS_KEY = (import.meta.env.VITE_ACCESS_KEY as string | undefined) || "";
+
+const DEV_BEARER_TOKEN = (import.meta.env.VITE_DEV_BEARER_TOKEN as string | undefined) || "";
+
+const IS_DEV = Boolean(import.meta.env.DEV);
+
+
+const getAuthToken = (): string | null => {
+  const cookieToken = Cookies.get("authToken");
+  if (cookieToken && cookieToken.trim().length > 0) return cookieToken.trim();
+
+  if (IS_DEV && DEV_BEARER_TOKEN.trim().length > 0) return DEV_BEARER_TOKEN.trim();
+
+  return null;
+};
+
 const axiosInstance: AxiosInstance = axios.create({
-    baseURL: BASE_URL,
-    headers: {
-        Authorization: `Bearer ${Cookies.get("authToken")}`,
-        "Content-Type": "application/json",
-        "x-app-uid": APP_UID,
-        "x-access-key": ACCESS_KEY,
-    },
+  baseURL: BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+    "x-app-uid": APP_UID,
+    "x-access-key": ACCESS_KEY,
+  },
 });
 
-// Request interceptor to add Bearer token
 axiosInstance.interceptors.request.use(
-    (config) => {
-        const token = Cookies.get("authToken");
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
-    },
+  (config: InternalAxiosRequestConfig) => {
+    const token = getAuthToken();
+
+    const headers = AxiosHeaders.from(config.headers);
+
+    headers.set("Content-Type", "application/json");
+    headers.set("x-app-uid", APP_UID);
+    if (ACCESS_KEY) headers.set("x-access-key", ACCESS_KEY);
+
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    } else {
+      headers.delete("Authorization");
+    }
+
+    config.headers = headers;
+    return config;
+  },
+  (error) => Promise.reject(error),
 );
 
-// Response interceptor for global error handling
 axiosInstance.interceptors.response.use(
-    (response: AxiosResponse) => {
-        return response;
-    },
-    (error) => {
-        const status = error.response?.status;
-        const data = error.response?.data;
+  (response: AxiosResponse) => response,
+  (error) => {
+    const status = error.response?.status as number | undefined;
+    const data = error.response?.data as unknown;
 
-        // Custom Error Handling based on status
-        if (status === 401) {
-            // Don't redirect if we're already on the login page or if it's a login request
-            const isLoginRequest = error.config?.url?.includes("/v1/auth/login");
+    if (status === 401) {
+      const url = error.config?.url as string | undefined;
+      const isLoginRequest = url?.includes("/v1/auth/login") ?? false;
 
-            if (!isLoginRequest) {
-                toast.error("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.");
-
-                // Clear auth data
-                Cookies.remove("authToken");
-                localStorage.removeItem("user");
-                localStorage.removeItem("sessionId");
-
-                // Redirect to login (root)
-                if (window.location.pathname !== "/login") {
-                    // Use a small delay to allow the toast to be noticed
-                    setTimeout(() => {
-                        window.location.href = "/login?reason=401";
-                    }, 1000);
-                }
-            }
-        } else if (status === 403) {
-            toast.error("Forbidden: You do not have permission.");
-        } else if (status >= 500) {
-            toast.error("Server Error: Something went wrong.");
-        } else {
-            // If the backend returns a structured error message
-            if (data?.error?.message) {
-                toast.error(data.error.message);
-            } else {
-                toast.error("An unexpected error occurred.");
-            }
-        }
-
+      if (IS_DEV && DEV_BEARER_TOKEN.trim().length > 0) {
+        toast.error("401 Unauthorized (DEV): Backend từ chối request. Kiểm tra token/quyền.");
         return Promise.reject(error);
-    },
+      }
+
+      if (!isLoginRequest) {
+        toast.error("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.");
+
+        Cookies.remove("authToken");
+        localStorage.removeItem("user");
+        localStorage.removeItem("sessionId");
+
+        if (window.location.pathname !== "/login") {
+          setTimeout(() => {
+            window.location.href = "/login?reason=401";
+          }, 1000);
+        }
+      }
+    } else if (status === 403) {
+      toast.error("Forbidden: You do not have permission.");
+    } else if (typeof status === "number" && status >= 500) {
+      const maybeApi = data as { error?: { message?: string } } | null;
+      if (maybeApi?.error?.message) toast.error(maybeApi.error.message);
+      else toast.error("Server Error: Something went wrong.");
+    } else {
+      const maybeApi = data as { error?: { message?: string } } | null;
+      if (maybeApi?.error?.message) toast.error(maybeApi.error.message);
+      else toast.error("An unexpected error occurred.");
+    }
+
+    return Promise.reject(error);
+  },
 );
 
-// Generic API Function Types
-export interface RequestParams {
-    headers?: Record<string, string>;
-    body?: any;
-    params?: any; // Legacy support
-    query?: any; // New standard for Query Parameters
+function makeUnknownError(err: unknown): ApiResponse<never> {
+  const e = err as { response?: { status?: number; data?: unknown }; message?: string } | null;
+
+  return (
+    (e?.response?.data as ApiResponse<never> | undefined) ?? {
+      success: false,
+      statusCode: e?.response?.status ?? 500,
+      data: undefined,
+      meta: null,
+      error: {
+        code: "UNKNOWN_ERROR",
+        message: e?.message ?? "An unknown error occurred",
+      },
+    }
+  );
 }
 
-// Helper functions
 const api = {
-    get: async <T>(url: string, { headers, params, query }: RequestParams = {}): Promise<ApiResponse<T>> => {
-        try {
-            // merge params and query, preferring query if both exist
-            const finalParams = { ...params, ...query };
-            const response = await axiosInstance.get<ApiResponse<T>>(url, { headers, params: finalParams });
-            return response.data;
-        } catch (error: any) {
-            return (
-                error.response?.data || {
-                    success: false,
-                    statusCode: error.response?.status || 500,
-                    error: {
-                        code: "UNKNOWN_ERROR",
-                        message: error.message || "An unknown error occurred",
-                    },
-                }
-            );
-        }
-    },
+  get: async <T, TQuery = Record<string, unknown>>(
+    url: string,
+    { headers, params, query }: RequestParams<never, TQuery> = {},
+  ): Promise<ApiResponse<T>> => {
+    try {
+      const finalParams: Record<string, unknown> = { ...(params ?? {}), ...(query ?? {}) };
+      const response = await axiosInstance.get<ApiResponse<T>>(url, { headers, params: finalParams });
+      return response.data;
+    } catch (error: unknown) {
+      return makeUnknownError(error) as ApiResponse<T>;
+    }
+  },
 
-    post: async <T>(url: string, { headers, body, query }: RequestParams = {}): Promise<ApiResponse<T>> => {
-        try {
-            const response = await axiosInstance.post<ApiResponse<T>>(url, body, { headers, params: query });
-            return response.data;
-        } catch (error: any) {
-            return (
-                error.response?.data || {
-                    success: false,
-                    statusCode: error.response?.status || 500,
-                    error: {
-                        code: "UNKNOWN_ERROR",
-                        message: error.message || "An unknown error occurred",
-                    },
-                }
-            );
-        }
-    },
+  post: async <T, TBody = unknown, TQuery = Record<string, unknown>>(
+    url: string,
+    { headers, body, query }: RequestParams<TBody, TQuery> = {},
+  ): Promise<ApiResponse<T>> => {
+    try {
+      const response = await axiosInstance.post<ApiResponse<T>>(url, body, { headers, params: query });
+      return response.data;
+    } catch (error: unknown) {
+      return makeUnknownError(error) as ApiResponse<T>;
+    }
+  },
 
-    put: async <T>(url: string, { headers, body, query }: RequestParams = {}): Promise<ApiResponse<T>> => {
-        try {
-            const response = await axiosInstance.put<ApiResponse<T>>(url, body, { headers, params: query });
-            return response.data;
-        } catch (error: any) {
-            return (
-                error.response?.data || {
-                    success: false,
-                    statusCode: error.response?.status || 500,
-                    error: {
-                        code: "UNKNOWN_ERROR",
-                        message: error.message || "An unknown error occurred",
-                    },
-                }
-            );
-        }
-    },
+  put: async <T, TBody = unknown, TQuery = Record<string, unknown>>(
+    url: string,
+    { headers, body, query }: RequestParams<TBody, TQuery> = {},
+  ): Promise<ApiResponse<T>> => {
+    try {
+      const response = await axiosInstance.put<ApiResponse<T>>(url, body, { headers, params: query });
+      return response.data;
+    } catch (error: unknown) {
+      return makeUnknownError(error) as ApiResponse<T>;
+    }
+  },
 
-    delete: async <T>(url: string, { headers, body, query }: RequestParams = {}): Promise<ApiResponse<T>> => {
-        try {
-            const response = await axiosInstance.delete<ApiResponse<T>>(url, { headers, data: body, params: query });
-            return response.data;
-        } catch (error: any) {
-            return (
-                error.response?.data || {
-                    success: false,
-                    statusCode: error.response?.status || 500,
-                    error: {
-                        code: "UNKNOWN_ERROR",
-                        message: error.message || "An unknown error occurred",
-                    },
-                }
-            );
-        }
-    },
+  delete: async <T, TBody = unknown, TQuery = Record<string, unknown>>(
+    url: string,
+    { headers, body, query }: RequestParams<TBody, TQuery> = {},
+  ): Promise<ApiResponse<T>> => {
+    try {
+      const response = await axiosInstance.delete<ApiResponse<T>>(url, { headers, data: body, params: query });
+      return response.data;
+    } catch (error: unknown) {
+      return makeUnknownError(error) as ApiResponse<T>;
+    }
+  },
 };
 
 export default api;
