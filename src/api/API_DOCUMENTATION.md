@@ -28,7 +28,7 @@ All responses strictly follow this JSON structure:
 For any endpoint ending in `/get/list`, the following standard query parameters apply:
 
 | Parameter       | Type     | Default | Description                                                                        |
-| :-------------- | :------- | :------ | :--------------------------------------------------------------------------------- |
+|:--------------- |:-------- |:------- |:---------------------------------------------------------------------------------- |
 | `page`          | `number` | `1`     | The page number to retrieve (1-indexed).                                           |
 | `itemsPerPage`  | `number` | `10`    | Number of items per page.                                                          |
 | `sortColumn`    | `string` | `null`  | The specific column name to sort by (e.g., `createdAt`).                           |
@@ -39,9 +39,9 @@ For any endpoint ending in `/get/list`, the following standard query parameters 
 
 For endpoints retrieving detailed information of a single record (e.g. `/get/detail`):
 
-1.  **Input (Query Params)**: Do NOT use generic `id`. Use the explicit Primary Key name of the entity.
-    - Example: `?receiptId=REC-12345` (Correct) vs `?id=1` (Incorrect).
-2.  **Output (Response Data)**: The `data` property must be a single **Object** representing the record.
+1. **Input (Query Params)**: Do NOT use generic `id`. Use the explicit Primary Key name of the entity.
+   - Example: `?receiptId=REC-12345` (Correct) vs `?id=1` (Incorrect).
+2. **Output (Response Data)**: The `data` property must be a single **Object** representing the record.
 
 ---
 
@@ -59,7 +59,7 @@ For endpoints retrieving detailed information of a single record (e.g. `/get/det
 
 ---
 
-## 2. Reception Management (`/v1/receipt`)
+## 2. Reception Management (`/v1/receipts`)
 
 _Managed in `reception.ts`_
 
@@ -67,7 +67,7 @@ _Managed in `reception.ts`_
 
 ---
 
-## 3. Lab Management (`/v1/lab`)
+## 3. Lab Management (`/v1/labs`)
 
 _Managed in `lab.ts`_
 
