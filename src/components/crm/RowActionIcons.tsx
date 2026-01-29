@@ -48,8 +48,8 @@ export function RowActionIcons({ onView, onEdit, onDelete, disabled }: Props) {
         className="h-9 w-9 text-destructive hover:text-destructive"
         onClick={onDelete}
         disabled={disabled}
-        aria-label={t("common.actions.delete")}
-        title={t("common.actions.delete")}
+        aria-label={t("common.delete")}
+        title={t("common.delete")}
       >
         <Trash2 className="h-4 w-4" />
       </Button>

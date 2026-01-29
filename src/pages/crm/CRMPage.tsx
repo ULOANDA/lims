@@ -1,12 +1,15 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Users, ReceiptText, FileText, Search, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ClientsTab, type ClientsTabHandle } from "./ClientsTab";
-import { OrdersTab, type OrdersTabHandle } from "./OrdersTab";
-import { QuotesTab, type QuotesTabHandle } from "./QuotesTab";
+
+import { ClientsTab } from "./ClientsTab";
+import { OrdersTab } from "./OrdersTab";
+import { QuotesTab } from "./QuotesTab";
+import { CrmCreateModalHost } from "@/components/crm/CrmCreateModal";
+
 
 type CrmTab = "clients" | "orders" | "quotes";
 
@@ -14,10 +17,7 @@ export function CRMPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<CrmTab>("clients");
   const [globalSearch, setGlobalSearch] = useState("");
-
-  const clientsRef = useRef<ClientsTabHandle | null>(null);
-  const ordersRef = useRef<OrdersTabHandle | null>(null);
-  const quotesRef = useRef<QuotesTabHandle | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const tabs = useMemo(
     () => [
@@ -27,12 +27,6 @@ export function CRMPage() {
     ],
     [t],
   );
-
-  const handleCreate = () => {
-    if (activeTab === "clients") clientsRef.current?.openCreate();
-    if (activeTab === "orders") ordersRef.current?.openCreate();
-    if (activeTab === "quotes") quotesRef.current?.openCreate();
-  };
 
   return (
     <div className="p-6 space-y-6">
@@ -65,24 +59,35 @@ export function CRMPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={t("crm.searchPlaceholder")}
+                placeholder={t("common.search")}
                 value={globalSearch}
                 onChange={(e) => setGlobalSearch(e.target.value)}
                 className="pl-10 bg-background"
               />
             </div>
 
-            <Button type="button" variant="default" className="flex items-center gap-2" onClick={handleCreate}>
+            <Button
+              type="button"
+              variant="default"
+              className="flex items-center gap-2"
+              onClick={() => setCreateOpen(true)}
+            >
               <Plus className="h-4 w-4" />
-              {t("common.actions.create")}
+              {t("common.create")}
             </Button>
           </div>
         </div>
       </div>
 
-      {activeTab === "clients" && <ClientsTab ref={clientsRef} externalSearch={globalSearch} />}
-      {activeTab === "orders" && <OrdersTab ref={ordersRef} externalSearch={globalSearch} />}
-      {activeTab === "quotes" && <QuotesTab ref={quotesRef} externalSearch={globalSearch} />}
+      <CrmCreateModalHost
+        open={createOpen}
+        tab={activeTab}
+        onClose={() => setCreateOpen(false)}
+      />
+
+      {activeTab === "clients" && <ClientsTab externalSearch={globalSearch} />}
+      {activeTab === "orders" && <OrdersTab externalSearch={globalSearch} />}
+      {activeTab === "quotes" && <QuotesTab externalSearch={globalSearch} />}
     </div>
   );
 }

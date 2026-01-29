@@ -51,7 +51,7 @@ export function QuoteDeleteModal({ open, quoteId, onClose, onConfirm }: Props) {
             {t("common.cancel")}
           </Button>
           <Button type="button" variant="destructive" onClick={confirm} disabled={submitting}>
-            {t("common.actions.delete")}
+            {t("common.delete")}
           </Button>
         </DialogFooter>
       </DialogContent>

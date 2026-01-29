@@ -27,7 +27,7 @@ type Props = {
   mode: "create" | "update";
   initial?: OrderDetail | null;
   onClose: () => void;
-  onSubmit?: (values: FormState) => Promise<void> | void;
+  onSubmit?: (values: FormState) => void | Promise<unknown>;
 };
 
 function toStr(v: unknown) {
