@@ -49,7 +49,7 @@ function orderStatusText(
   t: (k: string, opt?: { defaultValue?: string }) => string
 ) {
   const s = toStr(status).trim();
-  if (!s) return t("common.unknown");
+  if (!s) return t("common.noData");
   return t(`crm.orders.orderStatus.${s}`, { defaultValue: s });
 }
 
@@ -58,7 +58,7 @@ function statusBadge(
   t: (k: string, opt?: { defaultValue?: string }) => string
 ) {
   const s = toStr(status).trim();
-  if (!s) return <Badge variant="outline">{t("common.unknown")}</Badge>;
+  if (!s) return <Badge variant="outline">{t("common.noData")}</Badge>;
 
   const label = orderStatusText(s, t);
 
