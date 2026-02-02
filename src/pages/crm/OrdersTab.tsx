@@ -19,7 +19,7 @@ import {
 } from "@/components/crm/orderUpsertMapper";
 
 import { OrderDeleteModal } from "@/components/crm/OrderDeleteModal";
-import { RowActionIcons } from "@/components/crm/RowActionIcons";
+import { RowActionIcons } from "@/components/common/RowActionIcons";
 
 type Props = {
   externalSearch: string;
