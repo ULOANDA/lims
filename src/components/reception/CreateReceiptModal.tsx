@@ -113,7 +113,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
   const [mode, setMode] = useState<Mode>("full");
   const [submitting, setSubmitting] = useState(false);
 
-  const DEFAULT_RECEIPT_STATUS: ReceiptStatus = "Pending";
+  const DEFAULT_RECEIPT_STATUS: ReceiptStatus = "Draft";
 
   const [basic, setBasic] = useState<BasicFormState>(() => ({
     receiptCode: "",
@@ -448,7 +448,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
 
                     <div className="space-y-3 text-sm">
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.contactPerson.contactName")}</Label>
+                        <Label className="text-xs text-muted-foreground">{t("crm.clients.sections.contacts.fields.contactName")}</Label>
                         <Input
                           value={basic.contactName}
                           onChange={(e) => setBasic({ ...basic, contactName: e.target.value })}
@@ -457,7 +457,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.contactPerson.contactPhone")}</Label>
+                        <Label className="text-xs text-muted-foreground">{t("crm.clients.sections.contacts.fields.contactPhone")}</Label>
                         <Input
                           value={basic.contactPhone}
                           onChange={(e) => setBasic({ ...basic, contactPhone: e.target.value })}
@@ -466,7 +466,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.contactPerson.contactEmail")}</Label>
+                        <Label className="text-xs text-muted-foreground">{t("crm.clients.sections.contacts.fields.contactEmail")}</Label>
                         <Input
                           value={basic.contactEmail}
                           onChange={(e) => setBasic({ ...basic, contactEmail: e.target.value })}
@@ -475,7 +475,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.contactPerson.contactPosition")}</Label>
+                        <Label className="text-xs text-muted-foreground">{t("crm.clients.sections.contacts.fields.contactPosition")}</Label>
                         <Input
                           value={basic.contactPosition}
                           onChange={(e) => setBasic({ ...basic, contactPosition: e.target.value })}
@@ -484,7 +484,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.contactPerson.contactAddress")}</Label>
+                        <Label className="text-xs text-muted-foreground">{t("crm.clients.sections.contacts.fields.contactAddress")}</Label>
                         <Textarea
                           value={basic.contactAddress}
                           onChange={(e) => setBasic({ ...basic, contactAddress: e.target.value })}
@@ -536,7 +536,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                           value={basic.receiptPriority}
                           onChange={(e) => setBasic({ ...basic, receiptPriority: e.target.value as ReceiptPriority })}
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("lab.receipts.receiptPriorityPlaceholder")}
+                          placeholder={t("reception.createReceipt.receiptPriorityPlaceholder")}
                         />
                       </div>
 
@@ -548,16 +548,17 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                             setBasic({ ...basic, receiptDeliveryMethod: e.target.value as ReceiptDeliveryMethod })
                           }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("lab.receipts.receiptDeliveryMethodPlaceholder")}
+                          placeholder={t("reception.createReceipt.receiptDeliveryMethodPlaceholder")}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("lab.receipts.trackingNumber")}</Label>
+                        <Label className="text-xs text-muted-foreground">{t("reception.createReceipt.trackingNumber")}</Label>
                         <Input
                           value={basic.trackingNumber}
                           onChange={(e) => setBasic({ ...basic, trackingNumber: e.target.value })}
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("reception.createReceipt.trackingNumberPlaceholder")}
                         />
                       </div>
                     </div>
@@ -652,7 +653,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
 
                             <div>
                               <Label className="text-xs text-muted-foreground">
-                                {t("lab.samples.sampleType")}
+                                {t("lab.samples.sampleTypeName")}
                               </Label>
                               <Input
                                 value={sample.sampleTypeName}
@@ -662,7 +663,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                                   setFull({ ...full, samples: next });
                                 }}
                                 className="mt-1 h-8 text-sm bg-background border border-border"
-                                placeholder={t("lab.samples.sampleType")}
+                                placeholder={t("lab.samples.sampleTypeName")}
                               />
                             </div>
 
@@ -764,12 +765,12 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                           <div className="grid grid-cols-12 gap-2 mb-2">
                             <div className="col-span-5">
                               <Label className="text-[11px] text-muted-foreground">
-                                {t("lab.samples.sampleInfoLabel")}
+                                {t("lab.samples.sampleInfo")}
                               </Label>
                             </div>
                             <div className="col-span-6">
                               <Label className="text-[11px] text-muted-foreground">
-                                {t("lab.samples.sampleInfoValue")}
+                                {t("lab.samples.sampleVolume")}
                               </Label>
                             </div>
                             <div className="col-span-1" />
@@ -791,7 +792,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                                       setFull({ ...full, samples: next });
                                     }}
                                     className="h-7 text-xs bg-background border border-border"
-                                    placeholder={t("lab.samples.sampleInfoLabel")}
+                                    placeholder={t("lab.samples.sampleInfo")}
                                   />
                                 </div>
                                 <div className="col-span-6">
@@ -807,7 +808,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                                       setFull({ ...full, samples: next });
                                     }}
                                     className="h-7 text-xs bg-background border border-border"
-                                    placeholder={t("lab.samples.sampleInfoValue")}
+                                    placeholder={t("lab.samples.sampleVolume")}
                                   />
                                 </div>
                                 <div className="col-span-1 flex justify-end">
@@ -842,7 +843,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                                   {t("lab.analyses.parameterName")}
                                 </th>
                                 <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
-                                  {t("lab.analyses.method")}
+                                  {t("lab.analyses.protocolCode")}
                                 </th>
                                 <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
                                   {t("lab.analyses.matrixId")}
@@ -887,7 +888,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                                         setFull({ ...full, samples: next });
                                       }}
                                       className="h-7 text-xs bg-background border border-border"
-                                      placeholder={t("lab.analyses.method")}
+                                      placeholder={t("lab.analyses.protocolCode")}
                                     />
                                   </td>
 

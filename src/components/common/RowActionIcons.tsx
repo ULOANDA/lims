@@ -35,8 +35,8 @@ export function RowActionIcons({
           className="h-9 w-9"
           onClick={onView}
           disabled={disabled}
-          aria-label={t("common.actions.view")}
-          title={t("common.actions.view")}
+          aria-label={t("common.view")}
+          title={t("common.view")}
         >
           <FileText className="h-4 w-4" />
         </Button>
@@ -50,8 +50,8 @@ export function RowActionIcons({
           className="h-9 w-9"
           onClick={onEdit}
           disabled={disabled}
-          aria-label={t("common.actions.edit")}
-          title={t("common.actions.edit")}
+          aria-label={t("common.edit")}
+          title={t("common.edit")}
         >
           <Pencil className="h-4 w-4" />
         </Button>

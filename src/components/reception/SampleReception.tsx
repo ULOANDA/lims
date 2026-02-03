@@ -14,7 +14,11 @@ import { ReceiptDeleteModal } from "@/components/reception/ReceiptDeleteModal";
 import { RowActionIcons } from "@/components/common/RowActionIcons";
 
 import { receiptsGetFull, receiptsGetList } from "@/api/receipts";
-import type { ReceiptDetail, ReceiptListItem, ReceiptStatus } from "@/types/receipt";
+import type {
+  ReceiptDetail,
+  ReceiptListItem,
+  ReceiptStatus,
+} from "@/types/receipt";
 
 type TabKey = "processing" | "return-results";
 
@@ -39,43 +43,66 @@ function isOverdue(deadlineIso?: string | null): boolean {
   return tt < Date.now();
 }
 
-function getReceiptStatusBadge(status: ReceiptStatus, t: (k: string) => string) {
+function toReceiptStatusLabelKey(status: ReceiptStatus): string {
+  if (status === "Draft") return "reception.receipts.status.draft";
+  if (status === "Received") return "reception.receipts.status.receive";
+  if (status === "Processing") return "reception.receipts.status.processing";
+  if (status === "Completed") return "reception.receipts.status.completed";
+  if (status === "Reported") return "reception.receipts.status.reported";
+  if (status === "Cancelled") return "reception.receipts.status.cancelled";
+  return "";
+}
+
+function getReceiptStatusBadge(
+  status: ReceiptStatus,
+  t: (k: string, opt?: Record<string, unknown>) => unknown,
+) {
+  const key = toReceiptStatusLabelKey(status);
+  const label = key ? String(t(key, { defaultValue: status })) : String(status);
+
   switch (status) {
+    case "Draft":
+      return (
+        <Badge variant="outline" className="text-muted-foreground border-border">
+          {label}
+        </Badge>
+      );
+
     case "Received":
       return (
         <Badge variant="outline" className="text-muted-foreground border-border">
-          {t("reception.receipts.status.received")}
+          {label}
         </Badge>
       );
 
     case "Processing":
       return (
         <Badge variant="default" className="bg-warning text-warning-foreground hover:bg-warning/90">
-          {t("reception.receipts.status.processing")}
+          {label}
         </Badge>
       );
 
     case "Completed":
       return (
         <Badge variant="default" className="bg-success text-success-foreground hover:bg-success/90">
-          {t("reception.receipts.status.completed")}
+          {label}
         </Badge>
       );
-
-    case "Cancelled":
-      return <Badge variant="destructive">{t("reception.receipts.status.cancelled")}</Badge>;
 
     case "Reported":
       return (
         <Badge variant="default" className="bg-primary text-primary-foreground hover:bg-primary/90">
-          {t("reception.receipts.status.reported")}
+          {label}
         </Badge>
       );
+
+    case "Cancelled":
+      return <Badge variant="destructive">{label}</Badge>;
 
     default:
       return (
         <Badge variant="secondary" className="text-muted-foreground">
-          {status}
+          {label}
         </Badge>
       );
   }
@@ -84,13 +111,15 @@ function getReceiptStatusBadge(status: ReceiptStatus, t: (k: string) => string) 
 export function SampleReception() {
   const { t } = useTranslation();
 
-  const dash = t("common.placeholder.dash");
+  const dash = t("common.noData");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("processing");
 
-  const [selectedReceiptFull, setSelectedReceiptFull] = useState<ReceiptDetail | null>(null);
-  const [isCreateReceiptModalOpen, setIsCreateReceiptModalOpen] = useState(false);
+  const [selectedReceiptFull, setSelectedReceiptFull] =
+    useState<ReceiptDetail | null>(null);
+  const [isCreateReceiptModalOpen, setIsCreateReceiptModalOpen] =
+    useState(false);
 
   const [deleteReceiptId, setDeleteReceiptId] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -102,7 +131,10 @@ export function SampleReception() {
   const [errorList, setErrorList] = useState<string | null>(null);
 
   const [list, setList] = useState<ReceiptListItem[]>([]);
-  const [meta, setMeta] = useState<{ totalPages: number; total: number } | null>(null);
+  const [meta, setMeta] = useState<{
+    totalPages: number;
+    total: number;
+  } | null>(null);
 
   const [openingReceiptId, setOpeningReceiptId] = useState<string | null>(null);
 
@@ -135,8 +167,13 @@ export function SampleReception() {
 
       const m = res.meta ?? null;
       const totalPages =
-        typeof m?.totalPages === "number" && Number.isFinite(m.totalPages) ? m.totalPages : 1;
-      const total = typeof m?.total === "number" && Number.isFinite(m.total) ? m.total : data.length;
+        typeof m?.totalPages === "number" && Number.isFinite(m.totalPages)
+          ? m.totalPages
+          : 1;
+      const total =
+        typeof m?.total === "number" && Number.isFinite(m.total)
+          ? m.total
+          : data.length;
 
       setMeta({ totalPages, total });
       setLoadingList(false);
@@ -150,14 +187,9 @@ export function SampleReception() {
 
   const filteredProcessing = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-
-    const base = list.filter((r) => {
-      const s = r.receiptStatus;
-      return s !== "Cancelled";
-    });
-
+    const base = list;
     if (!term) return base;
-
+  
     return base.filter((r) => {
       const code = (r.receiptCode ?? "").toLowerCase();
       const clientName = (r.client?.clientName ?? "").toLowerCase();
@@ -167,21 +199,20 @@ export function SampleReception() {
 
   const filteredReturnResults = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-
-    const base = list.filter((r) => {
-      const s = r.receiptStatus;
-      return s === "Completed" || s === "Reported";
-    });
-
+    const base = list;
+  
     if (!term) return base;
-
+  
     return base.filter((r) => {
       const code = (r.receiptCode ?? "").toLowerCase();
       const clientName = (r.client?.clientName ?? "").toLowerCase();
-      const clientEmail = ((r.client as { clientEmail?: string | null } | null)?.clientEmail ?? "").toLowerCase();
+      const clientEmail = (
+        (r.client as { clientEmail?: string | null } | null)?.clientEmail ?? ""
+      ).toLowerCase();
+  
       return code.includes(term) || clientName.includes(term) || clientEmail.includes(term);
     });
-  }, [list, searchTerm]);
+  }, [list, searchTerm]);  
 
   const totalReceipts = meta?.total ?? list.length;
 
@@ -213,8 +244,7 @@ export function SampleReception() {
         <ReceiptDetailModal
           receipt={selectedReceiptFull}
           onClose={() => setSelectedReceiptFull(null)}
-          onSampleClick={() => {
-          }}
+          onSampleClick={() => {}}
           onUpdated={(next) => {
             setSelectedReceiptFull(next);
             setList((prev) =>
@@ -223,17 +253,20 @@ export function SampleReception() {
                   ? {
                       ...r,
                       receiptStatus: next.receiptStatus,
-                      receiptDeadline: next.receiptDeadline ?? r.receiptDeadline,
+                      receiptDeadline:
+                        next.receiptDeadline ?? r.receiptDeadline,
                     }
-                  : r,
-              ),
+                  : r
+              )
             );
           }}
         />
       )}
 
       {isCreateReceiptModalOpen && (
-        <CreateReceiptModal onClose={() => setIsCreateReceiptModalOpen(false)} />
+        <CreateReceiptModal
+          onClose={() => setIsCreateReceiptModalOpen(false)}
+        />
       )}
 
       <ReceiptDeleteModal
@@ -248,28 +281,36 @@ export function SampleReception() {
           <div className="text-sm text-muted-foreground">
             {t("reception.sampleReception.metrics.totalReceipts")}
           </div>
-          <div className="text-3xl font-semibold mt-1 text-foreground">{totalReceipts}</div>
+          <div className="text-3xl font-semibold mt-1 text-foreground">
+            {totalReceipts}
+          </div>
         </div>
 
         <div className="bg-card rounded-lg border border-border p-4">
           <div className="text-sm text-muted-foreground">
             {t("reception.sampleReception.metrics.overdueReceipts")}
           </div>
-          <div className="text-3xl font-semibold mt-1 text-destructive">{overdueReceipts}</div>
+          <div className="text-3xl font-semibold mt-1 text-destructive">
+            {overdueReceipts}
+          </div>
         </div>
 
         <div className="bg-card rounded-lg border border-border p-4">
           <div className="text-sm text-muted-foreground">
             {t("reception.sampleReception.metrics.pendingSamples")}
           </div>
-          <div className="text-3xl font-semibold mt-1 text-warning">{pendingSamples}</div>
+          <div className="text-3xl font-semibold mt-1 text-warning">
+            {pendingSamples}
+          </div>
         </div>
 
         <div className="bg-card rounded-lg border border-border p-4">
           <div className="text-sm text-muted-foreground">
             {t("reception.sampleReception.metrics.returnResults")}
           </div>
-          <div className="text-3xl font-semibold mt-1 text-primary">{returnResultsCount}</div>
+          <div className="text-3xl font-semibold mt-1 text-primary">
+            {returnResultsCount}
+          </div>
         </div>
       </div>
 
@@ -287,10 +328,10 @@ export function SampleReception() {
                 activeTab === "processing"
                   ? "bg-background shadow-sm text-foreground"
                   : "text-muted-foreground"
-              }`}
-            >
+              }`}>
               <Package className="h-4 w-4" />
-              {t("reception.sampleReception.tabs.processing")} ({filteredProcessing.length})
+              {t("reception.sampleReception.tabs.processing")} (
+              {filteredProcessing.length})
             </Button>
 
             <Button
@@ -304,10 +345,10 @@ export function SampleReception() {
                 activeTab === "return-results"
                   ? "bg-background shadow-sm text-foreground"
                   : "text-muted-foreground"
-              }`}
-            >
+              }`}>
               <Truck className="h-4 w-4" />
-              {t("reception.sampleReception.tabs.returnResults")} ({filteredReturnResults.length})
+              {t("reception.sampleReception.tabs.returnResults")} (
+              {filteredReturnResults.length})
             </Button>
           </div>
 
@@ -328,8 +369,7 @@ export function SampleReception() {
             <Button
               variant="default"
               className="flex items-center gap-2"
-              onClick={() => setIsCreateReceiptModalOpen(true)}
-            >
+              onClick={() => setIsCreateReceiptModalOpen(true)}>
               <Plus className="h-4 w-4" />
               {t("reception.sampleReception.actions.createReceipt")}
             </Button>
@@ -383,14 +423,15 @@ export function SampleReception() {
                   const daysLeft = safeDaysLeft(receipt.receiptDeadline);
 
                   return (
-                    <tr key={receipt.receiptId} className="hover:bg-accent/30 transition-colors">
+                    <tr
+                      key={receipt.receiptId}
+                      className="hover:bg-accent/30 transition-colors">
                       <td className="px-4 py-4">
                         <div className="space-y-1">
                           <button
                             onClick={() => void openReceipt(receipt.receiptId)}
                             className="font-semibold text-primary hover:text-primary/80 hover:underline"
-                            disabled={openingReceiptId === receipt.receiptId}
-                          >
+                            disabled={openingReceiptId === receipt.receiptId}>
                             {receipt.receiptCode ?? dash}
                           </button>
 
@@ -400,7 +441,9 @@ export function SampleReception() {
 
                           <div className="text-xs text-muted-foreground">
                             {parseIsoDateOnly(receipt.receiptDate, dash)}{" "}
-                            {receipt.createdBy?.identityName ? `- ${receipt.createdBy.identityName}` : ""}
+                            {receipt.createdBy?.identityName
+                              ? `- ${receipt.createdBy.identityName}`
+                              : ""}
                           </div>
                         </div>
                       </td>
@@ -420,28 +463,46 @@ export function SampleReception() {
 
                           {typeof daysLeft === "number" ? (
                             daysLeft < 0 ? (
-                              <Badge variant="destructive" className="flex items-center gap-1 w-fit">
+                              <Badge
+                                variant="destructive"
+                                className="flex items-center gap-1 w-fit">
                                 <AlertCircle className="h-3 w-3" />
-                                {t("reception.sampleReception.deadline.overdue")}
+                                {t(
+                                  "reception.sampleReception.deadline.overdue"
+                                )}
                               </Badge>
                             ) : daysLeft <= 2 ? (
-                              <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 w-fit">
-                                {t("reception.sampleReception.deadline.daysLeft", { count: daysLeft })}
+                              <Badge
+                                variant="outline"
+                                className="bg-warning/10 text-warning border-warning/20 w-fit">
+                                {t(
+                                  "reception.sampleReception.deadline.daysLeft",
+                                  { count: daysLeft }
+                                )}
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="text-muted-foreground w-fit">
-                                {t("reception.sampleReception.deadline.daysLeft", { count: daysLeft })}
+                              <Badge
+                                variant="outline"
+                                className="text-muted-foreground w-fit">
+                                {t(
+                                  "reception.sampleReception.deadline.daysLeft",
+                                  { count: daysLeft }
+                                )}
                               </Badge>
                             )
                           ) : (
-                            <Badge variant="outline" className="text-muted-foreground w-fit">
+                            <Badge
+                              variant="outline"
+                              className="text-muted-foreground w-fit">
                               {dash}
                             </Badge>
                           )}
                         </div>
                       </td>
 
-                      <td className="px-4 py-4 text-sm text-muted-foreground">{dash}</td>
+                      <td className="px-4 py-4 text-sm text-muted-foreground">
+                        {dash}
+                      </td>
 
                       <td className="px-4 py-4">
                         <RowActionIcons
@@ -479,13 +540,19 @@ export function SampleReception() {
               <thead className="bg-muted/50 border-b border-border">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {t("reception.sampleReception.table.returnResults.receiptInfo")}
+                    {t(
+                      "reception.sampleReception.table.returnResults.receiptInfo"
+                    )}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {t("reception.sampleReception.table.returnResults.tracking")}
+                    {t(
+                      "reception.sampleReception.table.returnResults.tracking"
+                    )}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {t("reception.sampleReception.table.returnResults.deadline")}
+                    {t(
+                      "reception.sampleReception.table.returnResults.deadline"
+                    )}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     {t("reception.sampleReception.table.returnResults.contact")}
@@ -499,24 +566,37 @@ export function SampleReception() {
               <tbody className="divide-y divide-border">
                 {filteredReturnResults.map((receipt) => {
                   const trackingNo =
-                    (receipt as { receiptTrackingNo?: string | null }).receiptTrackingNo ??
-                    (receipt as { trackingNumber?: string | null }).trackingNumber ??
+                    (receipt as { receiptTrackingNo?: string | null })
+                      .receiptTrackingNo ??
+                    (receipt as { trackingNumber?: string | null })
+                      .trackingNumber ??
                     null;
 
                   const clientEmail =
-                    (receipt.client as { clientEmail?: string | null } | null)?.clientEmail ?? null;
+                    (receipt.client as { clientEmail?: string | null } | null)
+                      ?.clientEmail ?? null;
                   const clientAddress =
-                    (receipt.client as { clientAddress?: string | null } | null)?.clientAddress ?? null;
+                    (receipt.client as { clientAddress?: string | null } | null)
+                      ?.clientAddress ?? null;
                   const clientPhone =
-                    (receipt.client as { clientPhone?: string | null } | null)?.clientPhone ?? null;
+                    (receipt.client as { clientPhone?: string | null } | null)
+                      ?.clientPhone ?? null;
 
                   return (
-                    <tr key={receipt.receiptId} className="hover:bg-accent/30 transition-colors">
+                    <tr
+                      key={receipt.receiptId}
+                      className="hover:bg-accent/30 transition-colors">
                       <td className="px-4 py-4">
                         <div className="space-y-1">
-                          <div className="font-semibold text-foreground">{receipt.receiptCode ?? dash}</div>
-                          <div className="text-sm text-foreground">{receipt.client?.clientName ?? dash}</div>
-                          <div className="text-xs text-muted-foreground">{parseIsoDateOnly(receipt.receiptDate, dash)}</div>
+                          <div className="font-semibold text-foreground">
+                            {receipt.receiptCode ?? dash}
+                          </div>
+                          <div className="text-sm text-foreground">
+                            {receipt.client?.clientName ?? dash}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {parseIsoDateOnly(receipt.receiptDate, dash)}
+                          </div>
                         </div>
                       </td>
 
@@ -540,12 +620,16 @@ export function SampleReception() {
 
                       <td className="px-4 py-4">
                         <div className="space-y-1 text-sm">
-                          <div className="text-foreground">{clientAddress ?? dash}</div>
-                          <div className="text-muted-foreground">
-                            {t("reception.sampleReception.contact.phoneLabel")} {clientPhone ?? dash}
+                          <div className="text-foreground">
+                            {clientAddress ?? dash}
                           </div>
                           <div className="text-muted-foreground">
-                            {t("reception.sampleReception.contact.emailLabel")} {clientEmail ?? dash}
+                            {t("reception.sampleReception.contact.phoneLabel")}{" "}
+                            {clientPhone ?? dash}
+                          </div>
+                          <div className="text-muted-foreground">
+                            {t("reception.sampleReception.contact.emailLabel")}{" "}
+                            {clientEmail ?? dash}
                           </div>
                         </div>
                       </td>
@@ -565,7 +649,11 @@ export function SampleReception() {
             </table>
           </div>
 
-          <Pagination totalPages={meta?.totalPages ?? 1} currentPage={page} onPageChange={(p) => setPage(p)} />
+          <Pagination
+            totalPages={meta?.totalPages ?? 1}
+            currentPage={page}
+            onPageChange={(p) => setPage(p)}
+          />
         </div>
       )}
     </div>

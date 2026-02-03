@@ -50,6 +50,11 @@ export async function receiptsGetFull(
   const { receiptId, query } = input;
   return api.get<ReceiptDetail>("/v2/receipts/get/full", {
     query: { receiptId, ...(query ?? {}) },
+    headers: {
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
   });
 }
 

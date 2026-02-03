@@ -49,7 +49,14 @@ export type ReportRecipient = {
 export type ReceiptPriority = "Normal" | "Urgent" | (string & {});
 export type ReceiptDeliveryMethod = "HandOver" | "Post" | (string & {});
 
-export type ReceiptStatus = "Pending" | "Processing" | "Done" | "Cancelled" | (string & {});
+export type ReceiptStatus =
+  | "Draft"
+  | "Received"
+  | "Processing"
+  | "Completed"
+  | "Reported"
+  | "Cancelled"
+  | (string & {});
 
 export type SampleStatus =
   | "Received"
@@ -79,10 +86,14 @@ export type ReceiptListItem = {
 
   receiptDate?: IsoDateString | null;
   receiptDeadline?: IsoDateString | null;
-  receiptPriority?: ReceiptPriority | null;
-  receiptDeliveryMethod?: ReceiptDeliveryMethod | null;
 
-  client?: Pick<ClientSnapshot, "clientId" | "clientName"> | null;
+  receiptTrackingNo?: string | null;
+  trackingNumber?: string | null;
+
+  client?: Pick<
+    ClientSnapshot,
+    "clientId" | "clientName" | "clientEmail" | "clientPhone" | "clientAddress"
+  > | null;
 
   createdAt?: IsoDateString | null;
   createdBy?: IdentitySnapshot | null;
@@ -206,7 +217,10 @@ export type ReceiptSample = {
   physicalState?: string | null;
 
   createdAt?: IsoDateString | null;
-  createdBy?: Pick<IdentitySnapshot, "identityId" | "identityName" | "alias"> | null;
+  createdBy?: Pick<
+    IdentitySnapshot,
+    "identityId" | "identityName" | "alias"
+  > | null;
 
   analyses?: ReceiptAnalysis[] | null;
 
@@ -249,7 +263,6 @@ export type ReceiptDetail = {
   [key: string]: unknown;
 };
 
-// ---------- Bodies ----------
 
 export type ReceiptsCreateBody = {
   receiptCode?: string | null;
@@ -323,6 +336,9 @@ export type ReceiptsDeleteBody = {
 export type ReceiptDeleteResult = {
   receiptId: string;
   deletedAt?: IsoDateString | null;
-  deletedBy?: Pick<IdentitySnapshot, "identityId" | "identityName" | "alias"> | null;
+  deletedBy?: Pick<
+    IdentitySnapshot,
+    "identityId" | "identityName" | "alias"
+  > | null;
   [key: string]: unknown;
 };
