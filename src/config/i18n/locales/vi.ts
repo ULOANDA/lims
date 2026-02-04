@@ -87,6 +87,7 @@ export default {
     cancel: "Hủy",
     delete: "Xóa",
     add: "Thêm",
+    all: "Tất cả",
     create: "Tạo mới",
     search: "Tìm kiếm...",
     filter: "Lọc",
@@ -781,6 +782,18 @@ export default {
         Stored: "Lưu kho",
         Disposed: "Đã hủy",
       },
+      placeholders: {
+        receiptId: "Nhập mã phiếu...",
+        sampleTypeId: "Nhập loại mẫu (ID)...",
+        sampleClientInfo: "Nhập tên/ký hiệu mẫu (KH)...",
+        sampleVolume: "Nhập lượng mẫu...",
+        sampleStatus: "Chọn trạng thái...",
+        sampleStorageLoc: "Nhập vị trí lưu kho...",
+      },
+      upsert: {
+        createTitle: "Tạo mẫu",
+        updateTitle: "Cập nhật mẫu",
+      },
     },
     analyses: {
       price: "Đơn giá",
@@ -1041,6 +1054,7 @@ export default {
     },
     sampleDetail: {
       title: "Chi tiết mẫu: {{code}}",
+      sampleList: "Thông tin cơ bản",
       description: "Xem và chỉnh sửa thông tin mẫu, chỉ tiêu và tệp đính kèm.",
       relatedReceipt: "Phiếu liên quan",
       productDetails: "Thông tin sản phẩm",
@@ -1308,7 +1322,7 @@ export default {
         completed: "Hoàn thành",
         pending: "Chờ xử lý",
       },
-      searchPlaceholder: "Tìm kiếm theo mã mẫu, tên mẫu, mô tả...",
+      searchPlaceholder: "Tìm kiếm theo phiếu nhận...",
       table: {
         code: "Mã mẫu",
         name: "Tên mẫu",
