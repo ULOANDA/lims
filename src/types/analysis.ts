@@ -106,6 +106,11 @@ export type AnalysesCreateBody = {
 export type AnalysesUpdateBody = {
   analysisId: string;
 
+  sampleId?: string;
+  matrixId?: string | null;
+  parameterId?: string | null;
+  parameterName?: string | null;
+
   analysisStatus?: AnalysisStatusDb;
   analysisResult?: string | null;
   analysisResultStatus?: AnalysisResultStatusDb | null;
@@ -132,6 +137,7 @@ export type AnalysesUpdateBody = {
   rawData?: Record<string, unknown> | null;
 
   analysisNotes?: string | null;
+  createdAt?: IsoDateString;
 };
 
 export type AnalysesDeleteBody = {

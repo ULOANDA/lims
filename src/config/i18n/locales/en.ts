@@ -18,8 +18,11 @@ export default {
     storedSamplesTitle: "Stored Samples",
     storedSamplesDescription: "Sample Storage",
 
+    analysesTitle: "Analyses",
+    analysesDescription: "Analyses Management",
+
     libraryTitle: "Library",
-    LibraryDescription: "System Library",
+    libraryDescription: "System Library",
 
     parameterTitle: "Parameters",
     parameterDescription: "Parameter Library",
@@ -50,8 +53,8 @@ export default {
     sidebar: {
       title: "LIMS Lab",
       description: "Lab Management",
-      collapse: "Collapsed",
-      expand: "Expanded",
+      collapse: "Collapse",
+      expand: "Expand",
       language: "Language",
       langVi: "Vietnamese",
       langEn: "English",
@@ -130,6 +133,8 @@ export default {
     deletedAt: "Deleted At",
     status: "Status",
     note: "Note",
+    confirmDelete:
+      "Are you sure you want to delete? This action cannot be undone.",
     pagination: {
       itemsPerPagePrefix: "Show",
       itemsPerPageSuffix: " / page",
@@ -198,7 +203,7 @@ export default {
       },
 
       placeholders: {
-        clientId: "Enter exposing client ID...",
+        clientId: "Enter client ID...",
         clientName: "Enter customer/company name...",
         legalId: "Enter tax/ID...",
         saleScope: "Select management scope...",
@@ -815,7 +820,7 @@ export default {
       price: "Unit Price",
       analysisId: "Analysis ID",
       sampleId: "Sample ID",
-      matrixId: "Analysis Config",
+      matrixId: "Matrix ID",
       parameterId: "Parameter",
       parameterName: "Parameter Name",
       protocolCode: "Protocol Code",
@@ -838,6 +843,15 @@ export default {
         Testing: "Testing",
         Review: "Review",
         Approved: "Approved",
+        DataEntered: "Data entered",
+        TechReview: "Tech review",
+        ReTest: "Re-test",
+        Cancelled: "Cancelled",
+      },
+      resultStatus: {
+        Pass: "Pass",
+        Fail: "Fail",
+        NotEvaluated: "Not evaluated",
       },
     },
     equipment: {
@@ -942,11 +956,11 @@ export default {
         processing: "Processing",
         completed: "Completed",
         reported: "Reported",
-        cancelled: "Cancelled"
+        cancelled: "Cancelled",
       },
       delete: {
         title: "Delete Reception",
-        description: "This action can't be reverse",
+        description: "This action can't be undone.",
         confirmLabel: "Are you sure you want to delete this reception?",
         receiptIdLabel: "Receipt Id",
       },
@@ -981,7 +995,7 @@ export default {
       receiptPriorityPlaceholder: "Enter priority",
       receiptDeliveryMethodPlaceholder: "Enter delivery",
       trackingNumber: "Tracking Number",
-      trackingNumberPlaceholder: "Enter trucking number",
+      trackingNumberPlaceholder: "Enter tracking number",
     },
     receiptDetail: {
       title: "Receipt details: {{code}}",
@@ -1001,7 +1015,8 @@ export default {
       emailTemplate: {
         from: "",
         subject: "[LIMS] Results for {{code}}",
-        content: "Hi {{clientName}},\n\nReceipt: {{receiptCode}}\nReceived date: {{receiptDate}}\nDeadline: {{deadline}}\n\nPlease reply if you need further assistance.\n"
+        content:
+          "Hi {{clientName}},\n\nReceipt: {{receiptCode}}\nReceived date: {{receiptDate}}\nDeadline: {{deadline}}\n\nPlease reply if you need further assistance.\n",
       },
 
       email: {
@@ -1010,28 +1025,28 @@ export default {
         subject: "Subject",
         content: "Content",
         attachments: "Attachments",
-        send: "Send"
-      }
+        send: "Send",
+      },
     },
     sampleReception: {
       metrics: {
         totalReceipts: "Total receipts",
         overdueReceipts: "Overdue",
         pendingSamples: "Pending samples",
-        returnResults: "Return results"
+        returnResults: "Return results",
       },
 
       tabs: {
         processing: "Processing",
-        returnResults: "Return results"
+        returnResults: "Return results",
       },
 
       search: {
-        placeholder: "Search by receipt code / client / email..."
+        placeholder: "Search by receipt code / client / email...",
       },
 
       actions: {
-        createReceipt: "Create receipt"
+        createReceipt: "Create receipt",
       },
 
       receiptInfo: "Receipt info",
@@ -1041,31 +1056,31 @@ export default {
           status: "Status",
           deadline: "Deadline",
           notes: "Notes",
-          actions: "Actions"
+          actions: "Actions",
         },
         returnResults: {
           receiptInfo: "Receipt info",
           tracking: "Tracking",
           deadline: "Deadline",
           contact: "Contact",
-          actions: "Actions"
-        }
+          actions: "Actions",
+        },
       },
 
       deadline: {
         overdue: "Overdue",
         daysLeft: "{{count}} day left",
-        daysLeft_plural: "{{count}} days left"
+        daysLeft_plural: "{{count}} days left",
       },
 
       tracking: {
-        none: "No tracking number"
+        none: "No tracking number",
       },
 
       contact: {
         phoneLabel: "Phone:",
-        emailLabel: "Email:"
-      }
+        emailLabel: "Email:",
+      },
     },
 
     sampleDetail: {

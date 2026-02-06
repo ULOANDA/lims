@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, Plus, Pencil, Trash2, Filter } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -26,8 +26,99 @@ import type {
 import { AnalysisCreateModal } from "./AnalysisCreateModal";
 import { AnalysisUpdateModal } from "./AnalysisUpdateModal";
 import { AnalysisDeleteModal } from "./AnalysisDeleteModal";
+import { RowActionIcons } from "../common/RowActionIcons";
 
 type Row = AnalysisListItem;
+
+function getAnalysisStatusBadgeProps(status: AnalysisStatusDb): {
+  className: string;
+  labelKey: `lab.analyses.status.${AnalysisStatusDb}`;
+} {
+  switch (status) {
+    case "Approved":
+      return {
+        className: "bg-success text-success-foreground",
+        labelKey: `lab.analyses.status.${status}`,
+      };
+
+    case "TechReview":
+      return {
+        className: "bg-warning text-warning-foreground",
+        labelKey: `lab.analyses.status.${status}`,
+      };
+
+    case "DataEntered":
+      return {
+        className: "bg-secondary text-secondary-foreground",
+        labelKey: `lab.analyses.status.${status}`,
+      };
+
+    case "Testing":
+      return {
+        className: "bg-primary text-primary-foreground",
+        labelKey: `lab.analyses.status.${status}`,
+      };
+
+    case "ReTest":
+      return {
+        className: "bg-warning text-warning-foreground",
+        labelKey: `lab.analyses.status.${status}`,
+      };
+
+    case "Pending":
+      return {
+        className: "bg-muted text-foreground",
+        labelKey: `lab.analyses.status.${status}`,
+      };
+
+    case "Cancelled":
+      return {
+        className: "bg-destructive text-destructive-foreground",
+        labelKey: `lab.analyses.status.${status}`,
+      };
+
+    default: {
+      const _exhaustive: never = status;
+      return {
+        className: "bg-muted text-foreground",
+        labelKey: `lab.analyses.status.${_exhaustive}`,
+      };
+    }
+  }
+}
+
+function getAnalysisResultStatusBadgeProps(status: AnalysisResultStatusDb): {
+  className: string;
+  labelKey: `lab.analyses.resultStatus.${AnalysisResultStatusDb}`;
+} {
+  switch (status) {
+    case "Pass":
+      return {
+        className: "bg-success text-success-foreground",
+        labelKey: `lab.analyses.resultStatus.${status}`,
+      };
+
+    case "Fail":
+      return {
+        className: "bg-destructive text-destructive-foreground",
+        labelKey: `lab.analyses.resultStatus.${status}`,
+      };
+
+    case "NotEvaluated":
+      return {
+        className: "bg-muted text-muted-foreground",
+        labelKey: `lab.analyses.resultStatus.${status}`,
+      };
+
+    default: {
+      const _exhaustive: never = status;
+      return {
+        className: "bg-muted text-foreground",
+        labelKey: `lab.analyses.resultStatus.${_exhaustive}`,
+      };
+    }
+  }
+}
 
 export function AnalysesMainPanel() {
   const { t } = useTranslation();
@@ -52,9 +143,10 @@ export function AnalysesMainPanel() {
   const [errorList, setErrorList] = useState<string | null>(null);
 
   const [list, setList] = useState<Row[]>([]);
-  const [meta, setMeta] = useState<{ totalPages: number; total: number } | null>(
-    null,
-  );
+  const [meta, setMeta] = useState<{
+    totalPages: number;
+    total: number;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +164,7 @@ export function AnalysesMainPanel() {
       if (!res.success) {
         setList([]);
         setMeta(null);
-        setErrorList(res.error?.message ?? t("common.toast.requestFailed"));
+        setErrorList(res.error?.message ?? t("common.toast.failed"));
         setLoadingList(false);
         return;
       }
@@ -87,10 +179,19 @@ export function AnalysesMainPanel() {
           ? m.totalPages
           : 1;
 
-      const total =
-        typeof m?.total === "number" && Number.isFinite(m.total)
-          ? m.total
-          : data.length;
+      const totalFromTotal =
+        typeof (m as { total?: unknown } | null)?.total === "number" &&
+        Number.isFinite((m as { total: number }).total)
+          ? (m as { total: number }).total
+          : null;
+
+      const totalFromTotalItems =
+        typeof (m as { totalItems?: unknown } | null)?.totalItems === "number" &&
+        Number.isFinite((m as { totalItems: number }).totalItems)
+          ? (m as { totalItems: number }).totalItems
+          : null;
+
+      const total = totalFromTotal ?? totalFromTotalItems ?? data.length;
 
       setMeta({ totalPages, total });
       setLoadingList(false);
@@ -113,16 +214,14 @@ export function AnalysesMainPanel() {
       const analysisId = (r.analysisId ?? "").toLowerCase();
       const param = (r.parameterName ?? "").toLowerCase();
       return (
-        sampleId.includes(term) || analysisId.includes(term) || param.includes(term)
+        sampleId.includes(term) ||
+        analysisId.includes(term) ||
+        param.includes(term)
       );
     });
   }, [rows, searchTerm]);
 
-  // metrics (trên page hiện tại)
-  const pendingCount = rows.filter((r) => String(r.analysisStatus) === "Pending")
-    .length;
-  const assignedCount = rows.filter((r) => String(r.analysisStatus) === "Assigned")
-    .length;
+  const pendingCount = rows.filter((r) => r.analysisStatus === "Pending").length;
 
   const mCreate = useMutation({
     mutationFn: analysesCreate,
@@ -131,7 +230,7 @@ export function AnalysesMainPanel() {
         toast.error(res.error?.message ?? t("common.toast.failed"));
         return;
       }
-      toast.success(t("common.toast.success"));
+      toast.success(t("common.success"));
       setCreateOpen(false);
       setPage(1);
       setRefreshTick((x) => x + 1);
@@ -147,7 +246,7 @@ export function AnalysesMainPanel() {
         toast.error(res.error?.message ?? t("common.toast.failed"));
         return;
       }
-      toast.success(t("common.toast.success"));
+      toast.success(t("common.success"));
       setUpdateOpen(false);
       setUpdateTarget(null);
       setRefreshTick((x) => x + 1);
@@ -163,7 +262,7 @@ export function AnalysesMainPanel() {
         toast.error(res.error?.message ?? t("common.toast.failed"));
         return;
       }
-      toast.success(t("common.toast.success"));
+      toast.success(t("common.success"));
       setDeleteOpen(false);
       setDeleteTarget(null);
       setRefreshTick((x) => x + 1);
@@ -177,29 +276,22 @@ export function AnalysesMainPanel() {
   return (
     <div className="p-6 space-y-6">
       {/* Header Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-card rounded-lg border border-border p-4">
           <div className="text-sm text-muted-foreground">
-            {t("analyses.page.metrics.total")}
+            {t("common.count")}
           </div>
           <div className="text-3xl font-semibold mt-1 text-foreground">
             {totalAnalyses}
           </div>
         </div>
+
         <div className="bg-card rounded-lg border border-border p-4">
           <div className="text-sm text-muted-foreground">
-            {t("analyses.page.metrics.pending")}
+            {t("lab.analyses.status.Pending")}
           </div>
           <div className="text-3xl font-semibold mt-1 text-foreground">
             {pendingCount}
-          </div>
-        </div>
-        <div className="bg-card rounded-lg border border-border p-4">
-          <div className="text-sm text-muted-foreground">
-            {t("analyses.page.metrics.assigned")}
-          </div>
-          <div className="text-3xl font-semibold mt-1 text-foreground">
-            {assignedCount}
           </div>
         </div>
       </div>
@@ -210,7 +302,7 @@ export function AnalysesMainPanel() {
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder={t("analyses.page.searchPlaceholder")}
+              placeholder={t("common.search")}
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -221,17 +313,11 @@ export function AnalysesMainPanel() {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              {t("analyses.page.filter")}
-            </Button>
-
             <Button
               onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-2"
-            >
+              className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
-              {t("analyses.page.create")}
+              {t("common.create")}
             </Button>
           </div>
         </div>
@@ -260,27 +346,27 @@ export function AnalysesMainPanel() {
         <div className="bg-card rounded-lg border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-muted/50 border-b border-border">
+              <thead className="bg-muted border-b border-border">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                    {t("analyses.page.table.analysisId")}
+                    {t("lab.analyses.analysisId")}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                    {t("analyses.page.table.sampleId")}
+                    {t("lab.analyses.sampleId")}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                    {t("analyses.page.table.parameterName")}
+                    {t("lab.analyses.matrixId")}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                    {t("analyses.page.table.status")}
+                    {t("lab.analyses.parameterName")}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                    {t("analyses.page.table.resultStatus")}
+                    {t("lab.analyses.analysisStatus")}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                    {t("analyses.page.table.createdAt")}
+                    {t("lab.analyses.analysisResultStatus")}
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
+                  <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">
                     {t("common.actions")}
                   </th>
                 </tr>
@@ -290,73 +376,69 @@ export function AnalysesMainPanel() {
                 {filtered.map((r) => (
                   <tr
                     key={r.analysisId}
-                    className="hover:bg-accent/30 transition-colors"
-                  >
-                    <td className="px-4 py-3 text-sm text-foreground">
+                    className="hover:bg-accent transition-colors">
+                    <td className="px-4 py-3 text-sm font-semibold text-primary">
                       {r.analysisId}
                     </td>
+
                     <td className="px-4 py-3 text-sm text-foreground">
                       {r.sampleId}
                     </td>
 
                     <td className="px-4 py-3 text-sm text-foreground">
-                      {r.parameterName ?? (
-                        <span className="text-muted-foreground">-</span>
-                      )}
+                      {r.matrixId}
+                    </td>
+
+                    <td className="px-4 py-3 text-sm text-foreground">
+                      {r.parameterName ?? t("common.noData")}
                     </td>
 
                     <td className="px-4 py-3">
-                      <Badge
-                        variant="outline"
-                        className="text-xs border-border text-foreground"
-                      >
-                        {String(r.analysisStatus)}
-                      </Badge>
+                      {(() => {
+                        const p = getAnalysisStatusBadgeProps(r.analysisStatus);
+                        return (
+                          <Badge
+                            variant="secondary"
+                            className={`text-xs ${p.className}`}>
+                            {t(p.labelKey)}
+                          </Badge>
+                        );
+                      })()}
                     </td>
 
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-sm">
                       {r.analysisResultStatus ? (
-                        <Badge
-                          variant="secondary"
-                          className="text-xs bg-muted text-foreground"
-                        >
-                          {String(r.analysisResultStatus)}
-                        </Badge>
+                        (() => {
+                          const p = getAnalysisResultStatusBadgeProps(
+                            r.analysisResultStatus
+                          );
+                          return (
+                            <Badge
+                              variant="secondary"
+                              className={`text-xs ${p.className}`}>
+                              {t(p.labelKey)}
+                            </Badge>
+                          );
+                        })()
                       ) : (
-                        <span className="text-muted-foreground text-sm">-</span>
+                        <span className="text-muted-foreground">
+                          {t("common.noData")}
+                        </span>
                       )}
                     </td>
 
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {r.createdAt}
-                    </td>
-
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setUpdateTarget(r);
-                            setUpdateOpen(true);
-                          }}
-                          aria-label={t("common.edit")}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setDeleteTarget(r);
-                            setDeleteOpen(true);
-                          }}
-                          aria-label={t("common.delete")}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <RowActionIcons
+                        showView={false}
+                        onEdit={() => {
+                          setUpdateTarget(r);
+                          setUpdateOpen(true);
+                        }}
+                        onDelete={() => {
+                          setDeleteTarget(r);
+                          setDeleteOpen(true);
+                        }}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -365,8 +447,7 @@ export function AnalysesMainPanel() {
                   <tr>
                     <td
                       colSpan={7}
-                      className="px-4 py-10 text-center text-sm text-muted-foreground"
-                    >
+                      className="px-4 py-10 text-center text-sm text-muted-foreground">
                       {t("common.noData")}
                     </td>
                   </tr>
@@ -399,6 +480,8 @@ export function AnalysesMainPanel() {
           mCreate.mutate({
             body: {
               sampleId: v.sampleId,
+              matrixId: v.matrixId,
+              parameterId: v.parameterId,
               parameterName: v.parameterName,
               analysisStatus: v.analysisStatus as AnalysisStatusDb,
               analysisResultStatus: (v.analysisResultStatus ??
@@ -423,6 +506,12 @@ export function AnalysesMainPanel() {
           mUpdate.mutate({
             body: {
               analysisId: updateTarget.analysisId,
+
+              sampleId: v.sampleId,
+              matrixId: v.matrixId,
+              parameterId: v.parameterId,
+              parameterName: v.parameterName,
+
               analysisStatus: v.analysisStatus as AnalysisStatusDb,
               analysisResult: v.analysisResult,
               analysisResultStatus: (v.analysisResultStatus ??
