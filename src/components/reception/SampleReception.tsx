@@ -166,16 +166,20 @@ export function SampleReception() {
       setList(data);
 
       const m = res.meta ?? null;
+
       const totalPages =
         typeof m?.totalPages === "number" && Number.isFinite(m.totalPages)
           ? m.totalPages
           : 1;
-      const total =
-        typeof m?.total === "number" && Number.isFinite(m.total)
-          ? m.total
+      
+      const totalItems =
+        typeof (m as { totalItems?: unknown })?.totalItems === "number" &&
+        Number.isFinite((m as { totalItems: number }).totalItems)
+          ? (m as { totalItems: number }).totalItems
           : data.length;
-
-      setMeta({ totalPages, total });
+      
+      setMeta({ totalPages, total: totalItems });
+      
       setLoadingList(false);
     }
 
