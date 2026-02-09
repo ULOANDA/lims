@@ -118,6 +118,7 @@ export default {
       deleted: "Deleted successfully",
       failed: "Action failed",
       tryAgain: "Try Again",
+      requestFailed: "Request Failed",
     },
     placeholder: {
       enterValue: "Enter value...",
@@ -752,6 +753,8 @@ export default {
       senderInfo: "Sender Info",
       conditionCheck: "Sample Condition",
       reportConfig: "Report Configuration",
+      receiptIdPlaceholder: "Enter Receipt ID",
+      receiptCodePlaceholder: "Enter Receipt Code",
       status: {
         Pending: "Pending",
         Processing: "Processing",

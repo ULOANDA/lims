@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Plus, Copy, Trash2, Building2, User } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -10,6 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { receiptsCreate, receiptsCreateFull } from "@/api/receipts";
+import { clientsGetList, clientsGetDetail } from "@/api/crm/clients";
+import { samplesGetList, samplesGetFull } from "@/api/samples";
+
 import type {
   ReceiptDetail,
   ReceiptsCreateBody,
@@ -19,6 +22,13 @@ import type {
   SampleInfoItem,
   ReceiptStatus,
 } from "@/types/receipt";
+
+import type { ClientDetail, ClientListItem } from "@/types/crm/client";
+import type {
+  SampleDetail,
+  SampleInfoValue,
+  SampleListItem,
+} from "@/types/sample";
 
 type Mode = "basic" | "full";
 
@@ -104,6 +114,78 @@ function nowId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function extractArrayField<T>(res: unknown): T[] {
+  if (!res || typeof res !== "object") return [];
+  const obj = res as Record<string, unknown>;
+  const candidates: unknown[] = [obj.data, obj.items, obj.results, obj.result];
+  for (const c of candidates) {
+    if (Array.isArray(c)) return c as T[];
+  }
+  return [];
+}
+
+function sampleInfoValueToRows(
+  v: SampleInfoValue | null | undefined
+): FormSampleInfoRow[] {
+  if (!v) return [{ id: nowId("new-sinfo"), label: "", value: "" }];
+
+  if (Array.isArray(v)) {
+    if (v.length === 0)
+      return [{ id: nowId("new-sinfo"), label: "", value: "" }];
+    return v.map((item, idx) => ({
+      id: nowId("new-sinfo"),
+      label: String(idx),
+      value: toStr(item),
+    }));
+  }
+
+  if (typeof v === "object") {
+    const entries = Object.entries(v as Record<string, unknown>);
+    if (entries.length === 0)
+      return [{ id: nowId("new-sinfo"), label: "", value: "" }];
+    return entries.map(([k, val]) => ({
+      id: nowId("new-sinfo"),
+      label: k,
+      value: toStr(val),
+    }));
+  }
+
+  return [{ id: nowId("new-sinfo"), label: "value", value: toStr(v) }];
+}
+
+function mapSampleDetailToFormSample(s: SampleDetail): FormSample {
+  return {
+    id: nowId("new-sample"),
+    sampleName: (s.sampleClientInfo ?? "").trim(),
+    sampleTypeId: s.sampleTypeId ?? "",
+    sampleTypeName: s.sampleTypeName ?? "",
+
+    sampleVolume: s.sampleVolume ?? "",
+    samplePreservation: s.samplePreservation ?? "",
+
+    sampleInfo: sampleInfoValueToRows(s.sampleInfo),
+
+    analyses:
+      (s.analyses ?? []).length > 0
+        ? s.analyses.map((a) => ({
+            id: nowId("new-analysis"),
+            matrixId: a.matrixId ?? "",
+            parameterName: a.parameterName ?? "",
+            protocolCode: a.protocolCode ?? "",
+            feeAfterTax: 0,
+          }))
+        : [
+            {
+              id: nowId("new-analysis"),
+              matrixId: "",
+              parameterName: "",
+              protocolCode: "",
+              feeAfterTax: 0,
+            },
+          ],
+  };
+}
+
 export function CreateReceiptModal({ onClose, onCreated }: Props) {
   const { t } = useTranslation();
 
@@ -171,7 +253,201 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
       },
     ],
   }));
+  const [clientSuggest, setClientSuggest] = useState<ClientListItem[]>([]);
+  const [clientSuggestLoading, setClientSuggestLoading] = useState(false);
+  const [clientSuggestOpen, setClientSuggestOpen] = useState(false);
 
+  const clientFetchSeq = useRef(0);
+
+  const clientQuery = useMemo(() => {
+    return mode === "basic" ? basic.clientId : full.clientId;
+  }, [mode, basic.clientId, full.clientId]);
+
+  useEffect(() => {
+    const q = clientQuery.trim();
+    if (!q) {
+      setClientSuggest([]);
+      setClientSuggestLoading(false);
+      return;
+    }
+
+    const seq = ++clientFetchSeq.current;
+
+    const tmr = window.setTimeout(() => {
+      void (async () => {
+        setClientSuggestLoading(true);
+        try {
+          const res = await clientsGetList({
+            query: { search: q, page: 1, itemsPerPage: 8 },
+          });
+          if (clientFetchSeq.current !== seq) return;
+          setClientSuggest(extractArrayField<ClientListItem>(res));
+        } catch (e) {
+          if (clientFetchSeq.current !== seq) return;
+          toast.error(t("common.requestFailed"), {
+            description: getErrorMessage(e, t("common.tryAgain")),
+          });
+        } finally {
+          if (clientFetchSeq.current === seq) setClientSuggestLoading(false);
+        }
+      })();
+    }, 250);
+
+    return () => window.clearTimeout(tmr);
+  }, [clientQuery, t]);
+
+  const applyClientDetailToForms = (detail: ClientDetail) => {
+    const anyDetail = detail as unknown as Record<string, unknown>;
+
+    const contactsUnknown =
+      anyDetail["contacts"] ??
+      anyDetail["clientContacts"] ??
+      anyDetail["contactPersons"];
+
+    const contactsArr = Array.isArray(contactsUnknown)
+      ? (contactsUnknown as Array<Record<string, unknown>>)
+      : [];
+
+    const first = contactsArr[0];
+
+    const firstContactName =
+      typeof first?.contactName === "string" ? first.contactName : "";
+    const firstContactPhone =
+      typeof first?.contactPhone === "string" ? first.contactPhone : "";
+    const firstContactEmail =
+      typeof first?.contactEmail === "string" ? first.contactEmail : "";
+    const firstContactPosition =
+      typeof first?.contactPosition === "string" ? first.contactPosition : "";
+    const firstContactAddress =
+      typeof first?.contactAddress === "string" ? first.contactAddress : "";
+
+    setFull((prev) => ({
+      ...prev,
+      clientId: (detail.clientId ?? "").trim(),
+      clientName: (detail.clientName ?? "").trim(),
+    }));
+
+    setBasic((prev) => ({
+      ...prev,
+      clientId: (detail.clientId ?? "").trim(),
+      clientName: (detail.clientName ?? "").trim(),
+
+      taxAddress: detail.invoiceInfo?.taxAddress ?? "",
+      taxCode: detail.invoiceInfo?.taxCode ?? "",
+      taxName: detail.invoiceInfo?.taxName ?? "",
+      taxEmail: detail.invoiceInfo?.taxEmail ?? "",
+
+      contactName: firstContactName,
+      contactPhone: firstContactPhone,
+      contactEmail: firstContactEmail,
+      contactPosition: firstContactPosition,
+      contactAddress: firstContactAddress,
+    }));
+  };
+
+  const handlePickClient = async (clientId: string) => {
+    try {
+      const detail = await clientsGetDetail({ params: { clientId } });
+      applyClientDetailToForms(detail);
+      setClientSuggestOpen(false);
+      toast.success(t("common.loadedSuccessfully"));
+    } catch (e) {
+      toast.error(t("common.requestFailed"), {
+        description: getErrorMessage(e, t("common.tryAgain")),
+      });
+    }
+  };
+
+  const [sampleQByIndex, setSampleQByIndex] = useState<Record<number, string>>(
+    {}
+  );
+  const [sampleSuggestByIndex, setSampleSuggestByIndex] = useState<
+    Record<number, SampleListItem[]>
+  >({});
+  const [sampleSuggestOpenByIndex, setSampleSuggestOpenByIndex] = useState<
+    Record<number, boolean>
+  >({});
+  const [sampleSuggestLoadingByIndex, setSampleSuggestLoadingByIndex] =
+    useState<Record<number, boolean>>({});
+
+  const sampleFetchSeqByIndex = useRef<Record<number, number>>({});
+
+  const fetchSampleSuggest = (idx: number, qRaw: string) => {
+    const q = qRaw.trim();
+    if (!q) {
+      setSampleSuggestByIndex((p) => ({ ...p, [idx]: [] }));
+      setSampleSuggestLoadingByIndex((p) => ({ ...p, [idx]: false }));
+      return;
+    }
+
+    const nextSeq = (sampleFetchSeqByIndex.current[idx] ?? 0) + 1;
+    sampleFetchSeqByIndex.current[idx] = nextSeq;
+
+    setSampleSuggestLoadingByIndex((p) => ({ ...p, [idx]: true }));
+
+    window.setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await samplesGetList({
+            query: { search: q, page: 1, itemsPerPage: 8 },
+          });
+          const curSeq = sampleFetchSeqByIndex.current[idx] ?? 0;
+          if (curSeq !== nextSeq) return;
+
+          if (!res.success) {
+            toast.error(t("common.requestFailed"), {
+              description: res.error?.message ?? t("common.tryAgain"),
+            });
+            return;
+          }
+
+          setSampleSuggestByIndex((p) => ({ ...p, [idx]: res.data ?? [] }));
+        } catch (e) {
+          const curSeq = sampleFetchSeqByIndex.current[idx] ?? 0;
+          if (curSeq !== nextSeq) return;
+
+          toast.error(t("common.requestFailed"), {
+            description: getErrorMessage(e, t("common.tryAgain")),
+          });
+        } finally {
+          const curSeq = sampleFetchSeqByIndex.current[idx] ?? 0;
+          if (curSeq === nextSeq) {
+            setSampleSuggestLoadingByIndex((p) => ({ ...p, [idx]: false }));
+          }
+        }
+      })();
+    }, 250);
+  };
+
+  const handlePickSample = async (sampleIndex: number, sampleId: string) => {
+    setSampleSuggestOpenByIndex((p) => ({ ...p, [sampleIndex]: false }));
+    setSampleQByIndex((p) => ({ ...p, [sampleIndex]: sampleId }));
+
+    try {
+      const res = await samplesGetFull({ sampleId });
+      if (!res.success || !res.data) {
+        toast.error(t("common.requestFailed"), {
+          description: res.error?.message ?? t("common.tryAgain"),
+        });
+        return;
+      }
+
+      const mapped = mapSampleDetailToFormSample(res.data);
+
+      setFull((prev) => {
+        const next = [...prev.samples];
+        if (!next[sampleIndex]) return prev;
+        next[sampleIndex] = mapped;
+        return { ...prev, samples: next };
+      });
+
+      toast.success(t("common.loadedSuccessfully"));
+    } catch (e) {
+      toast.error(t("common.requestFailed"), {
+        description: getErrorMessage(e, t("common.tryAgain")),
+      });
+    }
+  };
 
   const handleDuplicateSample = (sampleIndex: number) => {
     const sampleToCopy = full.samples[sampleIndex];
@@ -180,8 +456,14 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
     const newSample: FormSample = {
       ...sampleToCopy,
       id: nowId("new-sample"),
-      analyses: sampleToCopy.analyses.map((a) => ({ ...a, id: nowId("new-analysis") })),
-      sampleInfo: sampleToCopy.sampleInfo.map((r) => ({ ...r, id: nowId("new-sinfo") })),
+      analyses: sampleToCopy.analyses.map((a) => ({
+        ...a,
+        id: nowId("new-analysis"),
+      })),
+      sampleInfo: sampleToCopy.sampleInfo.map((r) => ({
+        ...r,
+        id: nowId("new-sinfo"),
+      })),
     };
 
     const next = [...full.samples];
@@ -223,7 +505,10 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
     const next = [...full.samples];
     const s = next[sampleIndex];
     if (!s) return;
-    s.sampleInfo = [...s.sampleInfo, { id: nowId("new-sinfo"), label: "", value: "" }];
+    s.sampleInfo = [
+      ...s.sampleInfo,
+      { id: nowId("new-sinfo"), label: "", value: "" },
+    ];
     setFull({ ...full, samples: next });
   };
 
@@ -235,82 +520,80 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
     setFull({ ...full, samples: next });
   };
 
+  const buildBasicBody = (): ReceiptsCreateBody => ({
+    receiptStatus: DEFAULT_RECEIPT_STATUS,
+    receiptCode: basic.receiptCode.trim() || null,
 
-  const buildBasicBody = (): ReceiptsCreateBody => {
-    const body: ReceiptsCreateBody = {
-      receiptStatus: DEFAULT_RECEIPT_STATUS,
-      receiptCode: basic.receiptCode.trim() || null,
-
-      client: {
-        clientId: basic.clientId.trim() || null,
-        clientName: basic.clientName.trim() || null,
-        invoiceInfo: {
-          taxAddress: basic.taxAddress.trim() || null,
-          taxCode: basic.taxCode.trim() || null,
-          taxName: basic.taxName.trim() || null,
-          taxEmail: basic.taxEmail.trim() || null,
-        },
+    client: {
+      clientId: basic.clientId.trim() || null,
+      clientName: basic.clientName.trim() || null,
+      invoiceInfo: {
+        taxAddress: basic.taxAddress.trim() || null,
+        taxCode: basic.taxCode.trim() || null,
+        taxName: basic.taxName.trim() || null,
+        taxEmail: basic.taxEmail.trim() || null,
       },
+    },
 
-      contactPerson: {
-        contactName: basic.contactName.trim() || null,
-        contactPhone: basic.contactPhone.trim() || null,
-        contactEmail: basic.contactEmail.trim() || null,
-        contactPosition: basic.contactPosition.trim() || null,
-        contactAddress: basic.contactAddress.trim() || null,
-      },
+    contactPerson: {
+      contactName: basic.contactName.trim() || null,
+      contactPhone: basic.contactPhone.trim() || null,
+      contactEmail: basic.contactEmail.trim() || null,
+      contactPosition: basic.contactPosition.trim() || null,
+      contactAddress: basic.contactAddress.trim() || null,
+    },
 
-      receiptDate: basic.receiptDate ? new Date(basic.receiptDate).toISOString() : null,
-      receiptDeadline: basic.receiptDeadline ? new Date(basic.receiptDeadline).toISOString() : null,
+    receiptDate: basic.receiptDate
+      ? new Date(basic.receiptDate).toISOString()
+      : null,
+    receiptDeadline: basic.receiptDeadline
+      ? new Date(basic.receiptDeadline).toISOString()
+      : null,
 
-      receiptPriority: basic.receiptPriority ? basic.receiptPriority : null,
-      receiptDeliveryMethod: basic.receiptDeliveryMethod ? basic.receiptDeliveryMethod : null,
+    receiptPriority: basic.receiptPriority ? basic.receiptPriority : null,
+    receiptDeliveryMethod: basic.receiptDeliveryMethod
+      ? basic.receiptDeliveryMethod
+      : null,
 
-      trackingNumber: basic.trackingNumber.trim() || null,
-    };
+    trackingNumber: basic.trackingNumber.trim() || null,
+  });
 
-    return body;
-  };
+  const buildFullBody = (): ReceiptsCreateFullBody => ({
+    receiptStatus: DEFAULT_RECEIPT_STATUS,
+    client: {
+      clientId: full.clientId.trim() || null,
+      clientName: full.clientName.trim() || null,
+    },
 
-  const buildFullBody = (): ReceiptsCreateFullBody => {
-    const body: ReceiptsCreateFullBody = {
-      receiptStatus: DEFAULT_RECEIPT_STATUS,
-      client: {
-        clientId: full.clientId.trim() || null,
-        clientName: full.clientName.trim() || null,
-      },
+    receiptDate: full.receiptDate
+      ? new Date(full.receiptDate).toISOString()
+      : null,
 
-      receiptDate: full.receiptDate ? new Date(full.receiptDate).toISOString() : null,
+    samples: full.samples.map((s) => {
+      const sampleInfo: SampleInfoItem[] =
+        s.sampleInfo
+          .map((r) => ({
+            label: toStr(r.label).trim(),
+            value: toStr(r.value).trim(),
+          }))
+          .filter((r) => r.label.length > 0 || r.value.length > 0) ?? [];
 
-      samples: full.samples.map((s) => {
-        const sampleInfo: SampleInfoItem[] =
-          s.sampleInfo
-            .map((r) => ({
-              label: toStr(r.label).trim(),
-              value: toStr(r.value).trim(),
-            }))
-            .filter((r) => r.label.length > 0 || r.value.length > 0)
-            .map((r) => ({ label: r.label, value: r.value })) ?? [];
+      return {
+        sampleName: s.sampleName.trim() || null,
+        sampleTypeId: s.sampleTypeId.trim() || null,
 
-        return {
-          sampleName: s.sampleName.trim() || null,
-          sampleTypeId: s.sampleTypeId.trim() || null,
+        sampleVolume: s.sampleVolume.trim() || null,
+        samplePreservation: s.samplePreservation.trim() || null,
 
-          sampleVolume: s.sampleVolume.trim() || null,
-          samplePreservation: s.samplePreservation.trim() || null,
+        sampleInfo: sampleInfo.length > 0 ? sampleInfo : null,
 
-          sampleInfo: sampleInfo.length > 0 ? sampleInfo : null,
-
-          analyses:
-            s.analyses.map((a) => ({
-              matrixId: a.matrixId.trim() || null,
-            })) ?? null,
-        };
-      }),
-    };
-
-    return body;
-  };
+        analyses:
+          s.analyses.map((a) => ({
+            matrixId: a.matrixId.trim() || null,
+          })) ?? null,
+      };
+    }),
+  });
 
   const handleSubmit = async () => {
     if (submitting) return;
@@ -341,6 +624,57 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
     }
   };
 
+  const renderClientIdInputWithSuggest = (
+    value: string,
+    onChangeValue: (v: string) => void
+  ) => {
+    return (
+      <div className="relative mt-1">
+        <Input
+          value={value}
+          onChange={(e) => {
+            onChangeValue(e.target.value);
+            setClientSuggestOpen(true);
+          }}
+          onFocus={() => setClientSuggestOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setClientSuggestOpen(false);
+          }}
+          className="h-8 text-sm bg-background border border-border"
+          placeholder={t("crm.clients.placeholders.clientId")}
+          disabled={submitting}
+        />
+
+        {clientSuggestOpen &&
+          (clientSuggestLoading || clientSuggest.length > 0) && (
+            <div className="absolute z-50 mt-1 w-full bg-background border border-border rounded-md shadow-lg overflow-hidden">
+              {clientSuggestLoading && (
+                <div className="px-2 py-2 text-xs text-muted-foreground">
+                  {t("common.loading")}
+                </div>
+              )}
+
+              {!clientSuggestLoading &&
+                clientSuggest.map((c) => (
+                  <button
+                    key={c.clientId}
+                    type="button"
+                    className="w-full text-left px-2 py-2 hover:bg-muted/30"
+                    onMouseDown={(ev) => ev.preventDefault()}
+                    onClick={() => void handlePickClient(c.clientId)}
+                    disabled={submitting}>
+                    <div className="text-sm font-medium">{c.clientName}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {c.clientId}
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
@@ -348,10 +682,19 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
       <div className="fixed inset-4 bg-background rounded-lg shadow-xl z-50 flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">{t("reception.createReceipt.title")}</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">{t("reception.createReceipt.description")}</p>
+            <h2 className="text-lg font-semibold text-foreground">
+              {t("reception.createReceipt.title")}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {t("reception.createReceipt.description")}
+            </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0" disabled={submitting}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="h-8 w-8 p-0"
+            disabled={submitting}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -360,79 +703,113 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
           <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
             <div className="flex items-center justify-between mb-3">
               <TabsList>
-                <TabsTrigger value="basic">{t("reception.createReceipt.tabs.basic")}</TabsTrigger>
-                <TabsTrigger value="full">{t("reception.createReceipt.tabs.full")}</TabsTrigger>
+                <TabsTrigger value="basic">
+                  {t("reception.createReceipt.tabs.basic")}
+                </TabsTrigger>
+                <TabsTrigger value="full">
+                  {t("reception.createReceipt.tabs.full")}
+                </TabsTrigger>
               </TabsList>
             </div>
 
+            {/* ---------------- BASIC ---------------- */}
             <TabsContent value="basic" className="mt-0">
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-3">
                   <div className="bg-muted/30 border border-border rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <h3 className="text-sm font-semibold text-foreground">{t("reception.createReceipt.clientInfo")}</h3>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {t("reception.createReceipt.clientInfo")}
+                      </h3>
                     </div>
 
                     <div className="space-y-3 text-sm">
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.clientId")}</Label>
-                        <Input
-                          value={basic.clientId}
-                          onChange={(e) => setBasic({ ...basic, clientId: e.target.value })}
-                          className="mt-1 h-8 text-sm bg-background border border-border"
-                        />
+                        <Label className="text-xs text-muted-foreground">
+                          {t("crm.clients.clientId")}
+                        </Label>
+                        {renderClientIdInputWithSuggest(basic.clientId, (v) =>
+                          setBasic((p) => ({ ...p, clientId: v }))
+                        )}
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.clientName")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("crm.clients.clientName")}
+                        </Label>
                         <Input
                           value={basic.clientName}
-                          onChange={(e) => setBasic({ ...basic, clientName: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({ ...basic, clientName: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("crm.clients.placeholders.clientName")}
                         />
                       </div>
                     </div>
                   </div>
 
                   <div className="bg-muted/30 border border-border rounded-lg p-4">
-                    <h3 className="text-sm font-semibold text-foreground mb-3">{t("reception.createReceipt.invoiceInfo")}</h3>
+                    <h3 className="text-sm font-semibold text-foreground mb-3">
+                      {t("reception.createReceipt.invoiceInfo")}
+                    </h3>
 
                     <div className="space-y-3 text-sm">
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.invoice.taxCode")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("crm.clients.invoice.taxCode")}
+                        </Label>
                         <Input
                           value={basic.taxCode}
-                          onChange={(e) => setBasic({ ...basic, taxCode: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({ ...basic, taxCode: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("crm.clients.sections.invoice.taxCodePlaceholder")}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.invoice.taxName")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("crm.clients.invoice.taxName")}
+                        </Label>
                         <Input
                           value={basic.taxName}
-                          onChange={(e) => setBasic({ ...basic, taxName: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({ ...basic, taxName: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("crm.clients.sections.invoice.taxNamePlaceholder")}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.invoice.taxEmail")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("crm.clients.invoice.taxEmail")}
+                        </Label>
                         <Input
                           value={basic.taxEmail}
-                          onChange={(e) => setBasic({ ...basic, taxEmail: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({ ...basic, taxEmail: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("crm.clients.sections.invoice.taxEmailPlaceholder")}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.invoice.taxAddress")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("crm.clients.invoice.taxAddress")}
+                        </Label>
                         <Textarea
                           value={basic.taxAddress}
-                          onChange={(e) => setBasic({ ...basic, taxAddress: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({ ...basic, taxAddress: e.target.value })
+                          }
                           className="mt-1 text-sm bg-background border border-border"
                           rows={3}
+                          placeholder={t("crm.clients.sections.invoice.taxAddressPlaceholder")}
                         />
                       </div>
                     </div>
@@ -443,53 +820,96 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                   <div className="bg-muted/30 rounded-lg p-4 border border-border">
                     <div className="flex items-center gap-2 mb-3">
                       <User className="h-4 w-4 text-muted-foreground" />
-                      <h3 className="text-sm font-semibold text-foreground">{t("reception.createReceipt.contactInfo")}</h3>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {t("reception.createReceipt.contactInfo")}
+                      </h3>
                     </div>
 
                     <div className="space-y-3 text-sm">
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.sections.contacts.fields.contactName")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t(
+                            "crm.clients.sections.contacts.fields.contactName"
+                          )}
+                        </Label>
                         <Input
                           value={basic.contactName}
-                          onChange={(e) => setBasic({ ...basic, contactName: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({ ...basic, contactName: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("crm.clients.sections.contacts.fields.contactNamePlaceholder")}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.sections.contacts.fields.contactPhone")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t(
+                            "crm.clients.sections.contacts.fields.contactPhone"
+                          )}
+                        </Label>
                         <Input
                           value={basic.contactPhone}
-                          onChange={(e) => setBasic({ ...basic, contactPhone: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({ ...basic, contactPhone: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("crm.clients.sections.contacts.fields.contactPhonePlaceholder")}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.sections.contacts.fields.contactEmail")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t(
+                            "crm.clients.sections.contacts.fields.contactEmail"
+                          )}
+                        </Label>
                         <Input
                           value={basic.contactEmail}
-                          onChange={(e) => setBasic({ ...basic, contactEmail: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({ ...basic, contactEmail: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("crm.clients.sections.contacts.fields.contactEmailPlaceholder")}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.sections.contacts.fields.contactPosition")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t(
+                            "crm.clients.sections.contacts.fields.contactPosition"
+                          )}
+                        </Label>
                         <Input
                           value={basic.contactPosition}
-                          onChange={(e) => setBasic({ ...basic, contactPosition: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({
+                              ...basic,
+                              contactPosition: e.target.value,
+                            })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("crm.clients.sections.contacts.fields.contactPositionPlaceholder")}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.sections.contacts.fields.contactAddress")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t(
+                            "crm.clients.sections.contacts.fields.contactAddress"
+                          )}
+                        </Label>
                         <Textarea
                           value={basic.contactAddress}
-                          onChange={(e) => setBasic({ ...basic, contactAddress: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({
+                              ...basic,
+                              contactAddress: e.target.value,
+                            })
+                          }
                           className="mt-1 text-sm bg-background border border-border"
                           rows={3}
+                          placeholder={t("crm.clients.sections.contacts.fields.contactAddressPlaceholder")}
                         />
                       </div>
                     </div>
@@ -498,67 +918,112 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
 
                 <div className="space-y-3">
                   <div className="bg-muted/30 rounded-lg p-4 border border-border">
-                    <h3 className="text-sm font-semibold text-foreground mb-3">{t("reception.createReceipt.receiptInfo")}</h3>
+                    <h3 className="text-sm font-semibold text-foreground mb-3">
+                      {t("reception.createReceipt.receiptInfo")}
+                    </h3>
 
                     <div className="space-y-3 text-sm">
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("lab.receipts.receiptCode")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("lab.receipts.receiptCode")}
+                        </Label>
                         <Input
                           value={basic.receiptCode}
-                          onChange={(e) => setBasic({ ...basic, receiptCode: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({ ...basic, receiptCode: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("lab.receipts.receiptCodePlaceholder")}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("lab.receipts.receiptDate")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("lab.receipts.receiptDate")}
+                        </Label>
                         <Input
                           type="date"
                           value={basic.receiptDate}
-                          onChange={(e) => setBasic({ ...basic, receiptDate: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({ ...basic, receiptDate: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("lab.receipts.receiptDeadline")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("lab.receipts.receiptDeadline")}
+                        </Label>
                         <Input
                           type="date"
                           value={basic.receiptDeadline}
-                          onChange={(e) => setBasic({ ...basic, receiptDeadline: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({
+                              ...basic,
+                              receiptDeadline: e.target.value,
+                            })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("lab.receipts.receiptPriority")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("lab.receipts.receiptPriority")}
+                        </Label>
                         <Input
                           value={basic.receiptPriority}
-                          onChange={(e) => setBasic({ ...basic, receiptPriority: e.target.value as ReceiptPriority })}
+                          onChange={(e) =>
+                            setBasic({
+                              ...basic,
+                              receiptPriority: e.target
+                                .value as ReceiptPriority,
+                            })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("reception.createReceipt.receiptPriorityPlaceholder")}
+                          placeholder={t(
+                            "reception.createReceipt.receiptPriorityPlaceholder"
+                          )}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("lab.receipts.receiptDeliveryMethod")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("lab.receipts.receiptDeliveryMethod")}
+                        </Label>
                         <Input
                           value={basic.receiptDeliveryMethod}
                           onChange={(e) =>
-                            setBasic({ ...basic, receiptDeliveryMethod: e.target.value as ReceiptDeliveryMethod })
+                            setBasic({
+                              ...basic,
+                              receiptDeliveryMethod: e.target
+                                .value as ReceiptDeliveryMethod,
+                            })
                           }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("reception.createReceipt.receiptDeliveryMethodPlaceholder")}
+                          placeholder={t(
+                            "reception.createReceipt.receiptDeliveryMethodPlaceholder"
+                          )}
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("reception.createReceipt.trackingNumber")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("reception.createReceipt.trackingNumber")}
+                        </Label>
                         <Input
                           value={basic.trackingNumber}
-                          onChange={(e) => setBasic({ ...basic, trackingNumber: e.target.value })}
+                          onChange={(e) =>
+                            setBasic({
+                              ...basic,
+                              trackingNumber: e.target.value,
+                            })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("reception.createReceipt.trackingNumberPlaceholder")}
+                          placeholder={t(
+                            "reception.createReceipt.trackingNumberPlaceholder"
+                          )}
                         />
                       </div>
                     </div>
@@ -573,49 +1038,66 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                   <div className="bg-muted/30 border border-border rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <h3 className="text-sm font-semibold text-foreground">{t("reception.createReceipt.clientInfo")}</h3>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {t("reception.createReceipt.clientInfo")}
+                      </h3>
                     </div>
 
                     <div className="space-y-3 text-sm">
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.clientId")}</Label>
-                        <Input
-                          value={full.clientId}
-                          onChange={(e) => setFull({ ...full, clientId: e.target.value })}
-                          className="mt-1 h-8 text-sm bg-background border border-border"
-                        />
+                        <Label className="text-xs text-muted-foreground">
+                          {t("crm.clients.clientId")}
+                        </Label>
+                        {renderClientIdInputWithSuggest(full.clientId, (v) =>
+                          setFull((p) => ({ ...p, clientId: v }))
+                        )}
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("crm.clients.clientName")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("crm.clients.clientName")}
+                        </Label>
                         <Input
                           value={full.clientName}
-                          onChange={(e) => setFull({ ...full, clientName: e.target.value })}
+                          onChange={(e) =>
+                            setFull({ ...full, clientName: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
+                          placeholder={t("crm.clients.placeholders.clientName")}
                         />
                       </div>
                     </div>
                   </div>
 
                   <div className="bg-muted/30 rounded-lg p-4 border border-border">
-                    <h3 className="text-sm font-semibold text-foreground mb-3">{t("reception.createReceipt.receiptInfo")}</h3>
+                    <h3 className="text-sm font-semibold text-foreground mb-3">
+                      {t("reception.createReceipt.receiptInfo")}
+                    </h3>
 
                     <div className="space-y-3 text-sm">
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("lab.receipts.receiptDate")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("lab.receipts.receiptDate")}
+                        </Label>
                         <Input
                           type="date"
                           value={full.receiptDate}
-                          onChange={(e) => setFull({ ...full, receiptDate: e.target.value })}
+                          onChange={(e) =>
+                            setFull({ ...full, receiptDate: e.target.value })
+                          }
                           className="mt-1 h-8 text-sm bg-background border border-border"
                         />
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground">{t("lab.receipts.receiptNote")}</Label>
+                        <Label className="text-xs text-muted-foreground">
+                          {t("lab.receipts.receiptNote")}
+                        </Label>
                         <Textarea
                           value={full.notes}
-                          onChange={(e) => setFull({ ...full, notes: e.target.value })}
+                          onChange={(e) =>
+                            setFull({ ...full, notes: e.target.value })
+                          }
                           className="mt-1 text-sm bg-background border border-border"
                           rows={3}
                           placeholder={t("lab.receipts.receiptNote")}
@@ -625,345 +1107,519 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                   </div>
                 </div>
 
-                <div className="flex-1 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-foreground">{t("reception.createReceipt.samplesList")}</h3>
-                  </div>
+                <div className="flex-1">
+                  <div className="bg-muted/30 rounded-lg border border-border p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {t("reception.createReceipt.samplesList")}
+                      </h3>
+                    </div>
 
-                  {full.samples.map((sample, sampleIndex) => (
-                    <div key={sample.id} className="bg-muted/30 rounded-lg p-4 border-2 border-border/50">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
-                              <Label className="text-xs text-muted-foreground">
-                                {t("lab.samples.sampleName")}
-                              </Label>
+                    <div className="space-y-3">
+                      {full.samples.map((sample, sampleIndex) => (
+                        <div
+                          key={sample.id}
+                          className="bg-muted/30 rounded-lg p-4 border-2 border-border/50">
+                          <div className="mb-3">
+                            <Label className="text-xs text-muted-foreground">
+                              {t("lab.receipts.receiptId")}
+                            </Label>
+                            <div className="relative mt-1">
                               <Input
-                                value={sample.sampleName}
+                                value={sampleQByIndex[sampleIndex] ?? ""}
                                 onChange={(e) => {
-                                  const next = [...full.samples];
-                                  next[sampleIndex] = { ...next[sampleIndex], sampleName: e.target.value };
-                                  setFull({ ...full, samples: next });
+                                  const v = e.target.value;
+                                  setSampleQByIndex((p) => ({
+                                    ...p,
+                                    [sampleIndex]: v,
+                                  }));
+                                  setSampleSuggestOpenByIndex((p) => ({
+                                    ...p,
+                                    [sampleIndex]: true,
+                                  }));
+                                  fetchSampleSuggest(sampleIndex, v);
                                 }}
-                                className="mt-1 h-8 text-sm bg-background border border-border"
-                                placeholder={t("lab.samples.sampleName")}
+                                onFocus={() =>
+                                  setSampleSuggestOpenByIndex((p) => ({
+                                    ...p,
+                                    [sampleIndex]: true,
+                                  }))
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Escape") {
+                                    setSampleSuggestOpenByIndex((p) => ({
+                                      ...p,
+                                      [sampleIndex]: false,
+                                    }));
+                                  }
+                                }}
+                                className="h-8 text-sm bg-background border border-border"
+                                placeholder={t(
+                                  "lab.receipts.receiptIdPlaceholder"
+                                )}
+                                disabled={submitting}
                               />
-                            </div>
 
-                            <div>
-                              <Label className="text-xs text-muted-foreground">
-                                {t("lab.samples.sampleTypeName")}
-                              </Label>
-                              <Input
-                                value={sample.sampleTypeName}
-                                onChange={(e) => {
-                                  const next = [...full.samples];
-                                  next[sampleIndex] = { ...next[sampleIndex], sampleTypeName: e.target.value };
-                                  setFull({ ...full, samples: next });
-                                }}
-                                className="mt-1 h-8 text-sm bg-background border border-border"
-                                placeholder={t("lab.samples.sampleTypeName")}
-                              />
-                            </div>
+                              {sampleSuggestOpenByIndex[sampleIndex] &&
+                                ((sampleSuggestLoadingByIndex[sampleIndex] ??
+                                  false) ||
+                                  (sampleSuggestByIndex[sampleIndex]?.length ??
+                                    0) > 0) && (
+                                  <div className="absolute z-50 mt-1 w-full bg-background border border-border rounded-md shadow-lg overflow-hidden">
+                                    {sampleSuggestLoadingByIndex[
+                                      sampleIndex
+                                    ] && (
+                                      <div className="px-2 py-2 text-xs text-muted-foreground">
+                                        {t("common.loading")}
+                                      </div>
+                                    )}
 
-                            <div>
-                              <Label className="text-xs text-muted-foreground">
-                                {t("lab.samples.sampleTypeId")}
-                              </Label>
-                              <Input
-                                value={sample.sampleTypeId}
-                                onChange={(e) => {
-                                  const next = [...full.samples];
-                                  next[sampleIndex] = { ...next[sampleIndex], sampleTypeId: e.target.value };
-                                  setFull({ ...full, samples: next });
-                                }}
-                                className="mt-1 h-8 text-sm bg-background border border-border"
-                                placeholder={t("lab.samples.sampleTypeId")}
-                              />
-                            </div>
-
-                            <div>
-                              <Label className="text-xs text-muted-foreground">
-                                {t("lab.samples.sampleVolume")}
-                              </Label>
-                              <Input
-                                value={sample.sampleVolume}
-                                onChange={(e) => {
-                                  const next = [...full.samples];
-                                  next[sampleIndex] = { ...next[sampleIndex], sampleVolume: e.target.value };
-                                  setFull({ ...full, samples: next });
-                                }}
-                                className="mt-1 h-8 text-sm bg-background border border-border"
-                                placeholder={t("lab.samples.sampleVolume")}
-                              />
-                            </div>
-
-                            <div className="md:col-span-2">
-                              <Label className="text-xs text-muted-foreground">
-                                {t("lab.samples.samplePreservation")}
-                              </Label>
-                              <Input
-                                value={sample.samplePreservation}
-                                onChange={(e) => {
-                                  const next = [...full.samples];
-                                  next[sampleIndex] = { ...next[sampleIndex], samplePreservation: e.target.value };
-                                  setFull({ ...full, samples: next });
-                                }}
-                                className="mt-1 h-8 text-sm bg-background border border-border"
-                                placeholder={t("lab.samples.samplePreservation")}
-                              />
+                                    {!sampleSuggestLoadingByIndex[
+                                      sampleIndex
+                                    ] &&
+                                      (
+                                        sampleSuggestByIndex[sampleIndex] ?? []
+                                      ).map((it) => (
+                                        <button
+                                          key={it.sampleId}
+                                          type="button"
+                                          className="w-full text-left px-2 py-2 hover:bg-muted/30"
+                                          onMouseDown={(ev) =>
+                                            ev.preventDefault()
+                                          }
+                                          onClick={() =>
+                                            void handlePickSample(
+                                              sampleIndex,
+                                              it.sampleId
+                                            )
+                                          }
+                                          disabled={submitting}>
+                                          <div className="text-sm font-medium">
+                                            {it.sampleTypeName ?? "-"}
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {it.sampleId}
+                                          </div>
+                                        </button>
+                                      ))}
+                                  </div>
+                                )}
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-1 ml-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDuplicateSample(sampleIndex)}
-                            className="h-8 w-8 p-0"
-                            title={t("reception.createReceipt.duplicateSample")}
-                            disabled={submitting}
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
-
-                          {full.samples.length > 1 && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleRemoveSample(sampleIndex)}
-                              className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              title={t("reception.createReceipt.removeSample")}
-                              disabled={submitting}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="mt-2">
-                        <div className="flex items-center justify-between mb-2">
-                          <Label className="text-xs text-muted-foreground">
-                            {t("lab.samples.sampleInfo")}
-                          </Label>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleAddSampleInfo(sampleIndex)}
-                            className="h-7 text-xs"
-                            disabled={submitting}
-                          >
-                            <Plus className="h-3.5 w-3.5 mr-1" />
-                            {t("reception.createReceipt.addSampleInfo")}
-                          </Button>
-                        </div>
-
-                        <div className="bg-background rounded-md border border-border p-2">
-                          <div className="grid grid-cols-12 gap-2 mb-2">
-                            <div className="col-span-5">
-                              <Label className="text-[11px] text-muted-foreground">
-                                {t("lab.samples.sampleInfo")}
-                              </Label>
-                            </div>
-                            <div className="col-span-6">
-                              <Label className="text-[11px] text-muted-foreground">
-                                {t("lab.samples.sampleVolume")}
-                              </Label>
-                            </div>
-                            <div className="col-span-1" />
-                          </div>
-
-                          <div className="space-y-2">
-                            {sample.sampleInfo.map((row, rowIndex) => (
-                              <div key={row.id} className="grid grid-cols-12 gap-2 items-center">
-                                <div className="col-span-5">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">
+                                    {t("lab.samples.sampleName")}
+                                  </Label>
                                   <Input
-                                    value={row.label}
+                                    value={sample.sampleName}
                                     onChange={(e) => {
                                       const next = [...full.samples];
-                                      const s = next[sampleIndex];
-                                      if (!s) return;
-                                      const r = s.sampleInfo[rowIndex];
-                                      if (!r) return;
-                                      s.sampleInfo[rowIndex] = { ...r, label: e.target.value };
+                                      next[sampleIndex] = {
+                                        ...next[sampleIndex],
+                                        sampleName: e.target.value,
+                                      };
                                       setFull({ ...full, samples: next });
                                     }}
-                                    className="h-7 text-xs bg-background border border-border"
-                                    placeholder={t("lab.samples.sampleInfo")}
+                                    className="mt-1 h-8 text-sm bg-background border border-border"
+                                    placeholder={t("lab.samples.sampleName")}
                                   />
                                 </div>
-                                <div className="col-span-6">
+
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">
+                                    {t("lab.samples.sampleTypeName")}
+                                  </Label>
                                   <Input
-                                    value={row.value}
+                                    value={sample.sampleTypeName}
                                     onChange={(e) => {
                                       const next = [...full.samples];
-                                      const s = next[sampleIndex];
-                                      if (!s) return;
-                                      const r = s.sampleInfo[rowIndex];
-                                      if (!r) return;
-                                      s.sampleInfo[rowIndex] = { ...r, value: e.target.value };
+                                      next[sampleIndex] = {
+                                        ...next[sampleIndex],
+                                        sampleTypeName: e.target.value,
+                                      };
                                       setFull({ ...full, samples: next });
                                     }}
-                                    className="h-7 text-xs bg-background border border-border"
+                                    className="mt-1 h-8 text-sm bg-background border border-border"
+                                    placeholder={t(
+                                      "lab.samples.sampleTypeName"
+                                    )}
+                                  />
+                                </div>
+
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">
+                                    {t("lab.samples.sampleTypeId")}
+                                  </Label>
+                                  <Input
+                                    value={sample.sampleTypeId}
+                                    onChange={(e) => {
+                                      const next = [...full.samples];
+                                      next[sampleIndex] = {
+                                        ...next[sampleIndex],
+                                        sampleTypeId: e.target.value,
+                                      };
+                                      setFull({ ...full, samples: next });
+                                    }}
+                                    className="mt-1 h-8 text-sm bg-background border border-border"
+                                    placeholder={t("lab.samples.sampleTypeId")}
+                                  />
+                                </div>
+
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">
+                                    {t("lab.samples.sampleVolume")}
+                                  </Label>
+                                  <Input
+                                    value={sample.sampleVolume}
+                                    onChange={(e) => {
+                                      const next = [...full.samples];
+                                      next[sampleIndex] = {
+                                        ...next[sampleIndex],
+                                        sampleVolume: e.target.value,
+                                      };
+                                      setFull({ ...full, samples: next });
+                                    }}
+                                    className="mt-1 h-8 text-sm bg-background border border-border"
                                     placeholder={t("lab.samples.sampleVolume")}
                                   />
                                 </div>
-                                <div className="col-span-1 flex justify-end">
-                                  {sample.sampleInfo.length > 1 && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => handleRemoveSampleInfo(sampleIndex, rowIndex)}
-                                      className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                      disabled={submitting}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  )}
+
+                                <div className="md:col-span-2">
+                                  <Label className="text-xs text-muted-foreground">
+                                    {t("lab.samples.samplePreservation")}
+                                  </Label>
+                                  <Input
+                                    value={sample.samplePreservation}
+                                    onChange={(e) => {
+                                      const next = [...full.samples];
+                                      next[sampleIndex] = {
+                                        ...next[sampleIndex],
+                                        samplePreservation: e.target.value,
+                                      };
+                                      setFull({ ...full, samples: next });
+                                    }}
+                                    className="mt-1 h-8 text-sm bg-background border border-border"
+                                    placeholder={t(
+                                      "lab.samples.samplePreservation"
+                                    )}
+                                  />
                                 </div>
                               </div>
-                            ))}
+                            </div>
+
+                            <div className="flex items-center gap-1 ml-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleDuplicateSample(sampleIndex)
+                                }
+                                className="h-8 w-8 p-0"
+                                title={t(
+                                  "reception.createReceipt.duplicateSample"
+                                )}
+                                disabled={submitting}>
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+
+                              {full.samples.length > 1 && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    handleRemoveSample(sampleIndex)
+                                  }
+                                  className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  title={t(
+                                    "reception.createReceipt.removeSample"
+                                  )}
+                                  disabled={submitting}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between mb-2">
+                              <Label className="text-xs text-muted-foreground">
+                                {t("lab.samples.sampleInfo")}
+                              </Label>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAddSampleInfo(sampleIndex)}
+                                className="h-7 text-xs"
+                                disabled={submitting}>
+                                <Plus className="h-3.5 w-3.5 mr-1" />
+                                {t("reception.createReceipt.addSampleInfo")}
+                              </Button>
+                            </div>
+
+                            <div className="bg-background rounded-md border border-border p-2">
+                              <div className="grid grid-cols-12 gap-2 mb-2">
+                                <div className="col-span-5">
+                                  <Label className="text-[11px] text-muted-foreground">
+                                    {t("lab.samples.sampleInfo")}
+                                  </Label>
+                                </div>
+                                <div className="col-span-6">
+                                  <Label className="text-[11px] text-muted-foreground">
+                                    {t("lab.samples.sampleVolume")}
+                                  </Label>
+                                </div>
+                                <div className="col-span-1" />
+                              </div>
+
+                              <div className="space-y-2">
+                                {sample.sampleInfo.map((row, rowIndex) => (
+                                  <div
+                                    key={row.id}
+                                    className="grid grid-cols-12 gap-2 items-center">
+                                    <div className="col-span-5">
+                                      <Input
+                                        value={row.label}
+                                        onChange={(e) => {
+                                          const next = [...full.samples];
+                                          const s = next[sampleIndex];
+                                          if (!s) return;
+                                          const r = s.sampleInfo[rowIndex];
+                                          if (!r) return;
+                                          s.sampleInfo[rowIndex] = {
+                                            ...r,
+                                            label: e.target.value,
+                                          };
+                                          setFull({ ...full, samples: next });
+                                        }}
+                                        className="h-7 text-xs bg-background border border-border"
+                                        placeholder={t(
+                                          "lab.samples.sampleInfo"
+                                        )}
+                                      />
+                                    </div>
+                                    <div className="col-span-6">
+                                      <Input
+                                        value={row.value}
+                                        onChange={(e) => {
+                                          const next = [...full.samples];
+                                          const s = next[sampleIndex];
+                                          if (!s) return;
+                                          const r = s.sampleInfo[rowIndex];
+                                          if (!r) return;
+                                          s.sampleInfo[rowIndex] = {
+                                            ...r,
+                                            value: e.target.value,
+                                          };
+                                          setFull({ ...full, samples: next });
+                                        }}
+                                        className="h-7 text-xs bg-background border border-border"
+                                        placeholder={t(
+                                          "lab.samples.sampleVolume"
+                                        )}
+                                      />
+                                    </div>
+                                    <div className="col-span-1 flex justify-end">
+                                      {sample.sampleInfo.length > 1 && (
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() =>
+                                            handleRemoveSampleInfo(
+                                              sampleIndex,
+                                              rowIndex
+                                            )
+                                          }
+                                          className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                          disabled={submitting}>
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-3">
+                            <Label className="text-xs text-muted-foreground mb-2 block">
+                              {t("reception.createReceipt.analysisList")}
+                            </Label>
+
+                            <div className="bg-background rounded-md border border-border overflow-hidden overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-muted/50 border-b border-border">
+                                  <tr>
+                                    <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
+                                      {t("lab.analyses.parameterName")}
+                                    </th>
+                                    <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
+                                      {t("lab.analyses.protocolCode")}
+                                    </th>
+                                    <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
+                                      {t("lab.analyses.matrixId")}
+                                    </th>
+                                    <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
+                                      {t("lab.analyses.price")}
+                                    </th>
+                                    <th className="px-2 py-1.5 text-center text-xs font-medium text-muted-foreground w-16" />
+                                  </tr>
+                                </thead>
+
+                                <tbody className="divide-y divide-border">
+                                  {sample.analyses.map(
+                                    (analysis, analysisIndex) => (
+                                      <tr
+                                        key={analysis.id}
+                                        className="hover:bg-muted/30">
+                                        <td className="px-2 py-1.5">
+                                          <Input
+                                            value={analysis.parameterName}
+                                            onChange={(e) => {
+                                              const next = [...full.samples];
+                                              const s = next[sampleIndex];
+                                              if (!s) return;
+                                              const a =
+                                                s.analyses[analysisIndex];
+                                              if (!a) return;
+                                              s.analyses[analysisIndex] = {
+                                                ...a,
+                                                parameterName: e.target.value,
+                                              };
+                                              setFull({
+                                                ...full,
+                                                samples: next,
+                                              });
+                                            }}
+                                            className="h-7 text-xs bg-background border border-border"
+                                            placeholder={t(
+                                              "lab.analyses.parameterName"
+                                            )}
+                                          />
+                                        </td>
+
+                                        <td className="px-2 py-1.5">
+                                          <Input
+                                            value={analysis.protocolCode}
+                                            onChange={(e) => {
+                                              const next = [...full.samples];
+                                              const s = next[sampleIndex];
+                                              if (!s) return;
+                                              const a =
+                                                s.analyses[analysisIndex];
+                                              if (!a) return;
+                                              s.analyses[analysisIndex] = {
+                                                ...a,
+                                                protocolCode: e.target.value,
+                                              };
+                                              setFull({
+                                                ...full,
+                                                samples: next,
+                                              });
+                                            }}
+                                            className="h-7 text-xs bg-background border border-border"
+                                            placeholder={t(
+                                              "lab.analyses.protocolCode"
+                                            )}
+                                          />
+                                        </td>
+
+                                        <td className="px-2 py-1.5">
+                                          <Input
+                                            value={analysis.matrixId}
+                                            onChange={(e) => {
+                                              const next = [...full.samples];
+                                              const s = next[sampleIndex];
+                                              if (!s) return;
+                                              const a =
+                                                s.analyses[analysisIndex];
+                                              if (!a) return;
+                                              s.analyses[analysisIndex] = {
+                                                ...a,
+                                                matrixId: e.target.value,
+                                              };
+                                              setFull({
+                                                ...full,
+                                                samples: next,
+                                              });
+                                            }}
+                                            className="h-7 text-xs bg-background border border-border"
+                                            placeholder={t(
+                                              "lab.analyses.matrixId"
+                                            )}
+                                          />
+                                        </td>
+
+                                        <td className="px-2 py-1.5">
+                                          <Input
+                                            type="number"
+                                            value={analysis.feeAfterTax}
+                                            onChange={(e) => {
+                                              const next = [...full.samples];
+                                              const s = next[sampleIndex];
+                                              if (!s) return;
+                                              const a =
+                                                s.analyses[analysisIndex];
+                                              if (!a) return;
+                                              s.analyses[analysisIndex] = {
+                                                ...a,
+                                                feeAfterTax:
+                                                  Number(e.target.value) || 0,
+                                              };
+                                              setFull({
+                                                ...full,
+                                                samples: next,
+                                              });
+                                            }}
+                                            className="h-7 text-xs text-left bg-background border border-border"
+                                            placeholder="0"
+                                          />
+                                        </td>
+
+                                        <td className="px-2 py-1.5 text-center">
+                                          {sample.analyses.length > 1 && (
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={() =>
+                                                handleRemoveAnalysis(
+                                                  sampleIndex,
+                                                  analysisIndex
+                                                )
+                                              }
+                                              className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                              disabled={submitting}>
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    )
+                                  )}
+                                </tbody>
+                              </table>
+
+                              <div className="p-2 bg-muted/30 border-t border-border">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleAddAnalysis(sampleIndex)}
+                                  className="w-full h-7 text-xs flex items-center justify-center gap-1.5 bg-background"
+                                  disabled={submitting}>
+                                  <Plus className="h-3.5 w-3.5" />
+                                  {t("reception.createReceipt.addAnalysis")}
+                                </Button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-
-                      <div className="mt-3">
-                        <Label className="text-xs text-muted-foreground mb-2 block">
-                          {t("reception.createReceipt.analysisList")}
-                        </Label>
-
-                        <div className="bg-background rounded-md border border-border overflow-hidden overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead className="bg-muted/50 border-b border-border">
-                              <tr>
-                                <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
-                                  {t("lab.analyses.parameterName")}
-                                </th>
-                                <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
-                                  {t("lab.analyses.protocolCode")}
-                                </th>
-                                <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
-                                  {t("lab.analyses.matrixId")}
-                                </th>
-                                <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">
-                                  {t("lab.analyses.price")}
-                                </th>
-                                <th className="px-2 py-1.5 text-center text-xs font-medium text-muted-foreground w-16" />
-                              </tr>
-                            </thead>
-
-                            <tbody className="divide-y divide-border">
-                              {sample.analyses.map((analysis, analysisIndex) => (
-                                <tr key={analysis.id} className="hover:bg-muted/30">
-                                  <td className="px-2 py-1.5">
-                                    <Input
-                                      value={analysis.parameterName}
-                                      onChange={(e) => {
-                                        const next = [...full.samples];
-                                        const s = next[sampleIndex];
-                                        if (!s) return;
-                                        const a = s.analyses[analysisIndex];
-                                        if (!a) return;
-                                        s.analyses[analysisIndex] = { ...a, parameterName: e.target.value };
-                                        setFull({ ...full, samples: next });
-                                      }}
-                                      className="h-7 text-xs bg-background border border-border"
-                                      placeholder={t("lab.analyses.parameterName")}
-                                    />
-                                  </td>
-
-                                  <td className="px-2 py-1.5">
-                                    <Input
-                                      value={analysis.protocolCode}
-                                      onChange={(e) => {
-                                        const next = [...full.samples];
-                                        const s = next[sampleIndex];
-                                        if (!s) return;
-                                        const a = s.analyses[analysisIndex];
-                                        if (!a) return;
-                                        s.analyses[analysisIndex] = { ...a, protocolCode: e.target.value };
-                                        setFull({ ...full, samples: next });
-                                      }}
-                                      className="h-7 text-xs bg-background border border-border"
-                                      placeholder={t("lab.analyses.protocolCode")}
-                                    />
-                                  </td>
-
-                                  <td className="px-2 py-1.5">
-                                    <Input
-                                      value={analysis.matrixId}
-                                      onChange={(e) => {
-                                        const next = [...full.samples];
-                                        const s = next[sampleIndex];
-                                        if (!s) return;
-                                        const a = s.analyses[analysisIndex];
-                                        if (!a) return;
-                                        s.analyses[analysisIndex] = { ...a, matrixId: e.target.value };
-                                        setFull({ ...full, samples: next });
-                                      }}
-                                      className="h-7 text-xs bg-background border border-border"
-                                      placeholder={t("lab.analyses.matrixId")}
-                                    />
-                                  </td>
-
-                                  <td className="px-2 py-1.5">
-                                    <Input
-                                      type="number"
-                                      value={analysis.feeAfterTax}
-                                      onChange={(e) => {
-                                        const next = [...full.samples];
-                                        const s = next[sampleIndex];
-                                        if (!s) return;
-                                        const a = s.analyses[analysisIndex];
-                                        if (!a) return;
-                                        s.analyses[analysisIndex] = {
-                                          ...a,
-                                          feeAfterTax: Number(e.target.value) || 0,
-                                        };
-                                        setFull({ ...full, samples: next });
-                                      }}
-                                      className="h-7 text-xs text-left bg-background border border-border"
-                                      placeholder="0"
-                                    />
-                                  </td>
-
-                                  <td className="px-2 py-1.5 text-center">
-                                    {sample.analyses.length > 1 && (
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => handleRemoveAnalysis(sampleIndex, analysisIndex)}
-                                        className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                        disabled={submitting}
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-
-                          <div className="p-2 bg-muted/30 border-t border-border">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleAddAnalysis(sampleIndex)}
-                              className="w-full h-7 text-xs flex items-center justify-center gap-1.5 bg-background"
-                              disabled={submitting}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              {t("reception.createReceipt.addAnalysis")}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
               </div>
             </TabsContent>
@@ -974,7 +1630,10 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             {t("reception.createReceipt.cancelButton")}
           </Button>
-          <Button onClick={() => void handleSubmit()} className="flex items-center gap-2" disabled={submitting}>
+          <Button
+            onClick={() => void handleSubmit()}
+            className="flex items-center gap-2"
+            disabled={submitting}>
             <Plus className="h-4 w-4" />
             {mode === "basic"
               ? t("reception.createReceipt.createButton")

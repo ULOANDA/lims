@@ -88,9 +88,17 @@ function receiptStatusKey(status: ReceiptStatus): string | null {
   return null;
 }
 
+function receiptStatusLabel(
+  t: (key: string, options?: Record<string, unknown>) => unknown,
+  status: ReceiptStatus,
+) {
+  const key = receiptStatusKey(status);
+  return String(key ? t(key, { defaultValue: status }) : status);
+}
+
 function getReceiptStatusBadge(
   t: (key: string, options?: Record<string, unknown>) => unknown,
-  status: ReceiptStatus | null | undefined,
+  status: ReceiptStatus | null | undefined
 ) {
   const st = status ?? "";
   const key = status ? receiptStatusKey(status) : null;
@@ -101,8 +109,7 @@ function getReceiptStatusBadge(
       return (
         <Badge
           variant="outline"
-          className="text-xs text-muted-foreground border-border"
-        >
+          className="text-xs text-muted-foreground border-border">
           {label}
         </Badge>
       );
@@ -111,8 +118,7 @@ function getReceiptStatusBadge(
       return (
         <Badge
           variant="outline"
-          className="text-xs text-muted-foreground border-border"
-        >
+          className="text-xs text-muted-foreground border-border">
           {label}
         </Badge>
       );
@@ -121,8 +127,7 @@ function getReceiptStatusBadge(
       return (
         <Badge
           variant="default"
-          className="text-xs bg-warning text-warning-foreground hover:bg-warning/90"
-        >
+          className="text-xs bg-warning text-warning-foreground hover:bg-warning/90">
           {label}
         </Badge>
       );
@@ -131,8 +136,7 @@ function getReceiptStatusBadge(
       return (
         <Badge
           variant="default"
-          className="text-xs bg-success text-success-foreground hover:bg-success/90"
-        >
+          className="text-xs bg-success text-success-foreground hover:bg-success/90">
           {label}
         </Badge>
       );
@@ -141,8 +145,7 @@ function getReceiptStatusBadge(
       return (
         <Badge
           variant="default"
-          className="text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-        >
+          className="text-xs bg-primary text-primary-foreground hover:bg-primary/90">
           {label}
         </Badge>
       );
@@ -165,12 +168,14 @@ function getReceiptStatusBadge(
 
 function getAnalysisStatusBadge(
   t: (key: string, options?: Record<string, unknown>) => unknown,
-  status: ReceiptAnalysis["analysisStatus"],
+  status: ReceiptAnalysis["analysisStatus"]
 ) {
   switch (status) {
     case "Pending":
       return (
-        <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
+        <Badge
+          variant="outline"
+          className="text-xs bg-muted text-muted-foreground">
           {String(t("lab.analyses.status.Pending"))}
         </Badge>
       );
@@ -236,12 +241,14 @@ export function ReceiptDetailModal({
       "";
 
     return {
-      from: String(t("reception.receiptDetail.emailTemplate.from", { defaultValue: "" })),
+      from: String(
+        t("reception.receiptDetail.emailTemplate.from", { defaultValue: "" })
+      ),
       to: toEmail,
       subject: String(
         t("reception.receiptDetail.emailTemplate.subject", {
           code: editedReceipt.receiptCode,
-        }),
+        })
       ),
       content: String(
         t("reception.receiptDetail.emailTemplate.content", {
@@ -249,7 +256,7 @@ export function ReceiptDetailModal({
           receiptCode: editedReceipt.receiptCode ?? "",
           receiptDate: editedReceipt.receiptDate?.split("T")[0] ?? "",
           deadline: editedReceipt.receiptDeadline?.split("T")[0] ?? "",
-        }),
+        })
       ),
       attachments: [] as string[],
     };
@@ -271,8 +278,12 @@ export function ReceiptDetailModal({
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: receiptsKeys.list(undefined) }),
-        qc.invalidateQueries({ queryKey: receiptsKeys.detail(receipt.receiptId) }),
-        qc.invalidateQueries({ queryKey: receiptsKeys.full(receipt.receiptId) }),
+        qc.invalidateQueries({
+          queryKey: receiptsKeys.detail(receipt.receiptId),
+        }),
+        qc.invalidateQueries({
+          queryKey: receiptsKeys.full(receipt.receiptId),
+        }),
       ]);
 
       toast.success(String(t("common.toast.saved")));
@@ -301,14 +312,21 @@ export function ReceiptDetailModal({
   };
 
   const handlePrevImage = () => {
-    setCurrentImageIndex((prev) => (prev === 0 ? sampleImages.length - 1 : prev - 1));
+    setCurrentImageIndex((prev) =>
+      prev === 0 ? sampleImages.length - 1 : prev - 1
+    );
   };
 
   const handleNextImage = () => {
-    setCurrentImageIndex((prev) => (prev === sampleImages.length - 1 ? 0 : prev + 1));
+    setCurrentImageIndex((prev) =>
+      prev === sampleImages.length - 1 ? 0 : prev + 1
+    );
   };
 
-  const handleEmailChange = (field: "from" | "to" | "subject" | "content", value: string) => {
+  const handleEmailChange = (
+    field: "from" | "to" | "subject" | "content",
+    value: string
+  ) => {
     setEmailForm((p) => ({ ...p, [field]: value }));
   };
 
@@ -319,7 +337,9 @@ export function ReceiptDetailModal({
   };
 
   const [openSampleModal, setOpenSampleModal] = useState(false);
-  const [selectedSample, setSelectedSample] = useState<ReceiptSample | null>(null);
+  const [selectedSample, setSelectedSample] = useState<ReceiptSample | null>(
+    null
+  );
   const [focusAnalysisId, setFocusAnalysisId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -328,7 +348,10 @@ export function ReceiptDetailModal({
     setFocusAnalysisId(null);
   }, [receipt.receiptId]);
 
-  const openSampleByLabId = (sample: ReceiptSample, analysisId: string | null) => {
+  const openSampleByLabId = (
+    sample: ReceiptSample,
+    analysisId: string | null
+  ) => {
     setSelectedSample(sample);
     setFocusAnalysisId(analysisId);
     setOpenSampleModal(true);
@@ -343,7 +366,7 @@ export function ReceiptDetailModal({
   const handleSaveSample = async (updatedSample: ReceiptSample) => {
     setEditedReceipt((prev) => {
       const nextSamples = (prev.samples ?? []).map((s) =>
-        s.sampleId === updatedSample.sampleId ? updatedSample : s,
+        s.sampleId === updatedSample.sampleId ? updatedSample : s
       );
       const next: ReceiptDetail = { ...prev, samples: nextSamples };
       onUpdated?.(next);
@@ -362,7 +385,11 @@ export function ReceiptDetailModal({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div>
             <h2 className="text-lg font-semibold text-foreground">
-              {String(t("reception.receiptDetail.title", { code: receipt.receiptCode }))}
+              {String(
+                t("reception.receiptDetail.title", {
+                  code: receipt.receiptCode,
+                })
+              )}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               {String(t("reception.receiptDetail.description"))}
@@ -374,8 +401,7 @@ export function ReceiptDetailModal({
               size="sm"
               onClick={() => console.log("Print label")}
               variant="outline"
-              className="flex items-center gap-1.5 text-xs"
-            >
+              className="flex items-center gap-1.5 text-xs">
               <Printer className="h-3.5 w-3.5" />
               {String(t("reception.receiptDetail.printLabel"))}
             </Button>
@@ -384,8 +410,7 @@ export function ReceiptDetailModal({
               size="sm"
               onClick={() => console.log("Export handover")}
               variant="outline"
-              className="flex items-center gap-1.5 text-xs"
-            >
+              className="flex items-center gap-1.5 text-xs">
               <FileCheck className="h-3.5 w-3.5" />
               {String(t("reception.receiptDetail.exportHandover"))}
             </Button>
@@ -394,8 +419,7 @@ export function ReceiptDetailModal({
               <Button
                 size="sm"
                 onClick={() => setIsEditing(true)}
-                className="flex items-center gap-1.5 text-xs"
-              >
+                className="flex items-center gap-1.5 text-xs">
                 <Edit className="h-3.5 w-3.5" />
                 {String(t("common.edit"))}
               </Button>
@@ -405,8 +429,7 @@ export function ReceiptDetailModal({
                   size="sm"
                   onClick={handleSave}
                   disabled={updateMut.isPending}
-                  className="flex items-center gap-1.5 text-xs"
-                >
+                  className="flex items-center gap-1.5 text-xs">
                   <Save className="h-3.5 w-3.5" />
                   {String(t("common.save"))}
                 </Button>
@@ -419,14 +442,17 @@ export function ReceiptDetailModal({
                     setEditedReceipt(receipt);
                     setIsEditing(false);
                   }}
-                  className="text-xs"
-                >
+                  className="text-xs">
                   {String(t("common.cancel"))}
                 </Button>
               </>
             )}
 
-            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="h-8 w-8 p-0">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -488,8 +514,8 @@ export function ReceiptDetailModal({
                     {String(t("reception.createReceipt.contactInfo"))}
                   </Label>
                   <div className="mt-1 text-foreground">
-                    {(editedReceipt.client?.clientPhone ?? "-")} -{" "}
-                    {(editedReceipt.client?.clientEmail ?? "-")}
+                    {editedReceipt.client?.clientPhone ?? "-"} -{" "}
+                    {editedReceipt.client?.clientEmail ?? "-"}
                   </div>
                 </div>
 
@@ -502,8 +528,7 @@ export function ReceiptDetailModal({
                       size="sm"
                       variant="outline"
                       className="flex items-center gap-2"
-                      onClick={() => setShowEmailModal(true)}
-                    >
+                      onClick={() => setShowEmailModal(true)}>
                       <Mail className="h-4 w-4" />
                       {String(t("reception.receiptDetail.sendMail"))}
                     </Button>
@@ -536,7 +561,10 @@ export function ReceiptDetailModal({
                     <Input
                       value={editedReceipt.receiptDeadline?.split("T")[0] ?? ""}
                       onChange={(e) =>
-                        setEditedReceipt((p) => ({ ...p, receiptDeadline: e.target.value }))
+                        setEditedReceipt((p) => ({
+                          ...p,
+                          receiptDeadline: e.target.value,
+                        }))
                       }
                       className="mt-1 bg-background"
                       type="date"
@@ -562,15 +590,16 @@ export function ReceiptDetailModal({
                             ...p,
                             receiptStatus: v as ReceiptStatus,
                           }))
-                        }
-                      >
+                        }>
                         <SelectTrigger className="bg-background">
-                          <SelectValue placeholder={String(t("common.select"))} />
+                          <SelectValue
+                            placeholder={String(t("common.select"))}
+                          />
                         </SelectTrigger>
                         <SelectContent>
                           {RECEIPT_STATUS_OPTIONS.map((st) => (
                             <SelectItem key={st} value={st}>
-                              {String(t(`lab.receipts.status.${st}`, { defaultValue: st }))}
+                              {receiptStatusLabel(t, st)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -588,10 +617,13 @@ export function ReceiptDetailModal({
                   <div className="mt-1">
                     <Badge
                       variant={
-                        editedReceipt.receiptPriority === "Urgent" ? "destructive" : "secondary"
-                      }
-                    >
-                      {String(editedReceipt.receiptPriority ?? t("common.noData"))}
+                        editedReceipt.receiptPriority === "Urgent"
+                          ? "destructive"
+                          : "secondary"
+                      }>
+                      {String(
+                        editedReceipt.receiptPriority ?? t("common.noData")
+                      )}
                     </Badge>
                   </div>
                 </div>
@@ -604,13 +636,18 @@ export function ReceiptDetailModal({
                     <Textarea
                       value={editedReceipt.receiptNote ?? ""}
                       onChange={(e) =>
-                        setEditedReceipt((p) => ({ ...p, receiptNote: e.target.value }))
+                        setEditedReceipt((p) => ({
+                          ...p,
+                          receiptNote: e.target.value,
+                        }))
                       }
                       className="mt-1 bg-background"
                       rows={3}
                     />
                   ) : (
-                    <div className="mt-1 text-foreground">{editedReceipt.receiptNote ?? "-"}</div>
+                    <div className="mt-1 text-foreground">
+                      {editedReceipt.receiptNote ?? "-"}
+                    </div>
                   )}
                 </div>
               </div>
@@ -636,14 +673,12 @@ export function ReceiptDetailModal({
                     <>
                       <button
                         onClick={handlePrevImage}
-                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-foreground/50 hover:bg-foreground/70 text-background p-1.5 rounded-full transition-colors"
-                      >
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-foreground/50 hover:bg-foreground/70 text-background p-1.5 rounded-full transition-colors">
                         <ChevronLeft className="h-4 w-4" />
                       </button>
                       <button
                         onClick={handleNextImage}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-foreground/50 hover:bg-foreground/70 text-background p-1.5 rounded-full transition-colors"
-                      >
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-foreground/50 hover:bg-foreground/70 text-background p-1.5 rounded-full transition-colors">
                         <ChevronRight className="h-4 w-4" />
                       </button>
                     </>
@@ -702,13 +737,19 @@ export function ReceiptDetailModal({
                         <React.Fragment key={sample.sampleId}>
                           {analyses.length > 0 ? (
                             analyses.map((analysis, index) => (
-                              <tr key={analysis.analysisId} className="hover:bg-muted/30">
+                              <tr
+                                key={analysis.analysisId}
+                                className="hover:bg-muted/30">
                                 <td className="px-4 py-3 text-sm">
                                   <button
                                     type="button"
-                                    onClick={() => openSampleByLabId(sample, analysis.analysisId)}
-                                    className="font-medium text-primary hover:text-primary/80 hover:underline"
-                                  >
+                                    onClick={() =>
+                                      openSampleByLabId(
+                                        sample,
+                                        analysis.analysisId
+                                      )
+                                    }
+                                    className="font-medium text-primary hover:text-primary/80 hover:underline">
                                     {analysis.analysisId}
                                   </button>
                                 </td>
@@ -717,32 +758,30 @@ export function ReceiptDetailModal({
                                   <>
                                     <td
                                       className="px-4 py-3 align-top border-r bg-primary/5"
-                                      rowSpan={analyses.length}
-                                    >
+                                      rowSpan={analyses.length}>
                                       <button
                                         type="button"
                                         onClick={() => {
                                           onSampleClick(sample);
                                           openSampleByLabId(sample, null);
                                         }}
-                                        className="font-medium text-primary hover:text-primary/80 hover:underline text-sm"
-                                      >
+                                        className="font-medium text-primary hover:text-primary/80 hover:underline text-sm">
                                         {sample.sampleId}
                                       </button>
                                     </td>
                                     <td
                                       className="px-4 py-3 align-top border-r bg-primary/5"
-                                      rowSpan={analyses.length}
-                                    >
+                                      rowSpan={analyses.length}>
                                       <div className="text-sm text-foreground">
                                         {sample.sampleClientInfo ?? "-"}
                                       </div>
                                     </td>
                                     <td
                                       className="px-4 py-3 align-top border-r bg-primary/5"
-                                      rowSpan={analyses.length}
-                                    >
-                                      <Badge variant="outline" className="text-xs">
+                                      rowSpan={analyses.length}>
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs">
                                         {sample.sampleTypeName ?? "-"}
                                       </Badge>
                                     </td>
@@ -761,22 +800,30 @@ export function ReceiptDetailModal({
                                     "-"}
                                 </td>
                                 <td className="px-4 py-3">
-                                  {getAnalysisStatusBadge(t, analysis.analysisStatus)}
+                                  {getAnalysisStatusBadge(
+                                    t,
+                                    analysis.analysisStatus
+                                  )}
                                 </td>
                                 <td className="px-4 py-3">
                                   {analysis.analysisResult != null ? (
                                     <div className="text-sm font-medium text-foreground">
-                                      {String(analysis.analysisResult)} {analysis.analysisUnit ?? ""}
+                                      {String(analysis.analysisResult)}{" "}
+                                      {analysis.analysisUnit ?? ""}
                                     </div>
                                   ) : (
-                                    <span className="text-sm text-muted-foreground">-</span>
+                                    <span className="text-sm text-muted-foreground">
+                                      -
+                                    </span>
                                   )}
                                 </td>
                               </tr>
                             ))
                           ) : (
                             <tr className="hover:bg-muted/30">
-                              <td className="px-4 py-3 text-sm text-muted-foreground">-</td>
+                              <td className="px-4 py-3 text-sm text-muted-foreground">
+                                -
+                              </td>
 
                               <td className="px-4 py-3 align-top border-r bg-primary/5">
                                 <button
@@ -785,8 +832,7 @@ export function ReceiptDetailModal({
                                     onSampleClick(sample);
                                     openSampleByLabId(sample, null);
                                   }}
-                                  className="font-medium text-primary hover:text-primary/80 hover:underline text-sm"
-                                >
+                                  className="font-medium text-primary hover:text-primary/80 hover:underline text-sm">
                                   {sample.sampleId}
                                 </button>
                               </td>
@@ -803,9 +849,10 @@ export function ReceiptDetailModal({
 
                               <td
                                 colSpan={5}
-                                className="px-4 py-3 text-center text-muted-foreground text-sm"
-                              >
-                                {String(t("reception.createReceipt.noAnalysis"))}
+                                className="px-4 py-3 text-center text-muted-foreground text-sm">
+                                {String(
+                                  t("reception.createReceipt.noAnalysis")
+                                )}
                               </td>
                             </tr>
                           )}
@@ -823,7 +870,10 @@ export function ReceiptDetailModal({
               <h3 className="font-semibold text-foreground">
                 {String(t("reception.receiptDetail.digitalRecords"))}
               </h3>
-              <Button size="sm" variant="outline" className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex items-center gap-2">
                 <Upload className="h-4 w-4" />
                 {String(t("reception.receiptDetail.uploadFile"))}
               </Button>
@@ -870,8 +920,7 @@ export function ReceiptDetailModal({
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowEmailModal(false)}
-                className="h-10 w-10 p-0"
-              >
+                className="h-10 w-10 p-0">
                 <X className="h-5 w-5" />
               </Button>
             </div>
@@ -906,7 +955,9 @@ export function ReceiptDetailModal({
                   </Label>
                   <Input
                     value={emailForm.subject}
-                    onChange={(e) => handleEmailChange("subject", e.target.value)}
+                    onChange={(e) =>
+                      handleEmailChange("subject", e.target.value)
+                    }
                     className="mt-1 bg-background"
                   />
                 </div>
@@ -917,7 +968,9 @@ export function ReceiptDetailModal({
                   </Label>
                   <Textarea
                     value={emailForm.content}
-                    onChange={(e) => handleEmailChange("content", e.target.value)}
+                    onChange={(e) =>
+                      handleEmailChange("content", e.target.value)
+                    }
                     className="mt-1 bg-background"
                     rows={10}
                   />
@@ -931,13 +984,17 @@ export function ReceiptDetailModal({
                     {emailForm.attachments.map((attachment, index) => (
                       <div
                         key={index}
-                        className="flex items-center gap-2 bg-muted px-3 py-1 rounded-md"
-                      >
+                        className="flex items-center gap-2 bg-muted px-3 py-1 rounded-md">
                         <FileCheck className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-foreground">{attachment}</span>
+                        <span className="text-sm text-foreground">
+                          {attachment}
+                        </span>
                       </div>
                     ))}
-                    <Button size="sm" variant="outline" className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex items-center gap-2">
                       <Upload className="h-4 w-4" />
                       {String(t("reception.receiptDetail.uploadFile"))}
                     </Button>
@@ -947,10 +1004,14 @@ export function ReceiptDetailModal({
             </div>
 
             <div className="flex items-center justify-end gap-2 p-6 border-t border-border">
-              <Button variant="outline" onClick={() => setShowEmailModal(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setShowEmailModal(false)}>
                 {String(t("common.cancel"))}
               </Button>
-              <Button onClick={handleSendEmail} className="flex items-center gap-2">
+              <Button
+                onClick={handleSendEmail}
+                className="flex items-center gap-2">
                 <Mail className="h-4 w-4" />
                 {String(t("reception.receiptDetail.email.send"))}
               </Button>
