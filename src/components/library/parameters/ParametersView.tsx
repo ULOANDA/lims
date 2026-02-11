@@ -1,22 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import { Input } from "@/components/ui/input";
 
-import { useMatricesList, useParametersList, useCreateParameter } from "@/api/library";
+import {
+  useCreateParameter,
+  useParametersAll,
+  libraryApi,
+} from "@/api/library";
 
-import type { Parameter, Matrix } from "@/types/library";
-
+import type { Parameter } from "@/types/library";
 import type { ParameterWithMatrices } from "../hooks/useLibraryData";
 
 import { LibraryHeader } from "../LibraryHeader";
 import { useServerPagination } from "../hooks/useServerPagination";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
-import { ParametersTable } from "./ParametersTable";
+import { ParametersTable, type ParametersExcelFiltersState } from "./ParametersTable";
 import { ParameterDetailPanel } from "./ParametersDetailPanel";
 
 type CreateParameterForm = {
@@ -50,10 +54,15 @@ function toFiniteNumberOrNull(v: unknown): number | null {
   return null;
 }
 
-function resolveDisplayStyle(ds: unknown): DisplayStyleResolved {
-  const obj = ds && typeof ds === "object" ? (ds as Record<string, unknown>) : undefined;
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+}
 
-  const unit = typeof obj?.unit === "string" && obj.unit.trim().length ? obj.unit : null;
+function resolveDisplayStyle(ds: unknown): DisplayStyleResolved {
+  const obj = asRecord(ds);
+
+  const unit =
+    typeof obj?.unit === "string" && obj.unit.trim().length ? (obj.unit as string) : null;
 
   const decimal =
     toFiniteNumberOrNull(obj?.decimal) ??
@@ -64,24 +73,51 @@ function resolveDisplayStyle(ds: unknown): DisplayStyleResolved {
 }
 
 function toParameterWithMatrices(p: Parameter): ParameterWithMatrices {
-  const anyP = p as unknown as Record<string, unknown>;
-
+  const anyP = asRecord(p) ?? {};
   return {
     ...p,
-    createdById: (anyP.createdById as string) ?? "",
-    modifiedAt: (anyP.modifiedAt as string) ?? (anyP.createdAt as string) ?? "",
-    modifiedById: (anyP.modifiedById as string) ?? "",
-
+    createdById: (typeof anyP.createdById === "string" ? anyP.createdById : "") ?? "",
+    modifiedAt:
+      (typeof anyP.modifiedAt === "string" ? anyP.modifiedAt : undefined) ??
+      (typeof anyP.createdAt === "string" ? anyP.createdAt : undefined) ??
+      "",
+    modifiedById: (typeof anyP.modifiedById === "string" ? anyP.modifiedById : "") ?? "",
     matrices: [],
     parameterNameEnResolved:
-      typeof (anyP.parameterNameEn as string | undefined) === "string" &&
-      (anyP.parameterNameEn as string).trim().length
-        ? (anyP.parameterNameEn as string)
+      typeof anyP.parameterNameEn === "string" && anyP.parameterNameEn.trim().length
+        ? anyP.parameterNameEn
         : p.parameterName,
-
     displayStyleResolved: resolveDisplayStyle(anyP.displayStyle),
   } as ParameterWithMatrices;
-} 
+}
+
+function createEmptyFilters(): ParametersExcelFiltersState {
+  return {
+    parameterId: [],
+    parameterName: [],
+    technicianAlias: [],
+    unit: [],
+  };
+}
+
+function applyLocalFilters(items: ParameterWithMatrices[], f: ParametersExcelFiltersState) {
+  const matchStr = (value: string, selected: string[]) =>
+    selected.length ? selected.includes(value) : true;
+
+  return items.filter((p) => {
+    const id = p.parameterId;
+    const name = p.parameterName;
+    const alias = p.technicianAlias?.trim().length ? p.technicianAlias : "";
+    const unit = p.displayStyleResolved.unit?.trim().length ? p.displayStyleResolved.unit : "";
+
+    return (
+      matchStr(id, f.parameterId) &&
+      matchStr(name, f.parameterName) &&
+      matchStr(alias, f.technicianAlias) &&
+      matchStr(unit, f.unit)
+    );
+  });
+}
 
 export function ParametersView() {
   const { t } = useTranslation();
@@ -89,8 +125,7 @@ export function ParametersView() {
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
 
-  const [selectedParameter, setSelectedParameter] =
-    useState<ParameterWithMatrices | null>(null);
+  const [selectedParameter, setSelectedParameter] = useState<ParameterWithMatrices | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateParameterForm>({
@@ -101,69 +136,47 @@ export function ParametersView() {
   const [serverTotalPages, setServerTotalPages] = useState<number | null>(null);
   const pagination = useServerPagination(serverTotalPages, 10);
 
-  const listInput = useMemo(
+  const allInput = useMemo(
     () => ({
       query: {
-        page: pagination.currentPage,
-        itemsPerPage: pagination.itemsPerPage,
+        page: 1,
+        itemsPerPage: 5000,
         search: debouncedSearch.trim().length ? debouncedSearch.trim() : null,
       },
       sort: { column: "createdAt", direction: "DESC" as const },
     }),
-    [pagination.currentPage, pagination.itemsPerPage, debouncedSearch]
+    [debouncedSearch]
   );
 
-  const parametersQ = useParametersList(listInput);
+  const parametersAllQ = useParametersAll(allInput);
 
-  const totalItems = parametersQ.data?.meta?.total ?? 0;
-  const totalPages = parametersQ.data?.meta?.totalPages ?? 1;
+  const allParameters = useMemo(() => {
+    const data = (parametersAllQ.data?.data ?? []) as unknown as Parameter[];
+    return data.map(toParameterWithMatrices);
+  }, [parametersAllQ.data]);
 
-  useEffect(() => {
-    setServerTotalPages(totalPages);
-  }, [totalPages]);
+  const [excelFilters, setExcelFilters] = useState<ParametersExcelFiltersState>(() => createEmptyFilters());
+
+  const filteredAll = useMemo(
+    () => applyLocalFilters(allParameters, excelFilters),
+    [allParameters, excelFilters]
+  );
+
+  const totalItems = filteredAll.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pagination.itemsPerPage));
+
+  useEffect(() => setServerTotalPages(totalPages), [totalPages]);
 
   useEffect(() => {
     if (pagination.currentPage > totalPages) pagination.handlePageChange(totalPages);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPages]);
 
-  const pageParameters = (parametersQ.data?.data ?? []) as unknown as Parameter[];
-
-  const pageItems = useMemo<ParameterWithMatrices[]>(
-    () => pageParameters.map(toParameterWithMatrices),
-    [pageParameters]
-  );
-
-  const selectedParameterId = selectedParameter?.parameterId ?? null;
-
-const selectedMatricesInput = useMemo(
-  () => ({
-    query: {
-      page: 1,
-      itemsPerPage: 10,
-      parameterId: selectedParameterId,
-      search: null,
-    },
-    sort: { column: "createdAt", direction: "DESC" as const },
-  }),
-  [selectedParameterId]
-);
-
-const selectedMatricesQ = useMatricesList(selectedMatricesInput, {
-  enabled: Boolean(selectedParameterId),
-});
-
-useEffect(() => {
-  if (!selectedParameterId) return;
-
-  const mats = (selectedMatricesQ.data?.data ?? []) as unknown as Matrix[];
-
-  setSelectedParameter((prev) => {
-    if (!prev) return prev;
-    if (prev.parameterId !== selectedParameterId) return prev;
-    return { ...prev, matrices: mats };
-  });
-}, [selectedMatricesQ.data, selectedParameterId]);
+  const pageItems = useMemo(() => {
+    const start = (pagination.currentPage - 1) * pagination.itemsPerPage;
+    const end = start + pagination.itemsPerPage;
+    return filteredAll.slice(start, end);
+  }, [filteredAll, pagination.currentPage, pagination.itemsPerPage]);
 
   const createParam = useCreateParameter();
 
@@ -183,17 +196,40 @@ useEffect(() => {
     if (!name) return;
 
     await createParam.mutateAsync({
-      body: {
-        parameterName: name,
-        technicianAlias: alias.length ? alias : null,
-      },
+      body: { parameterName: name, technicianAlias: alias.length ? alias : null },
     });
 
     setCreateOpen(false);
   };
 
-  const isLoading = parametersQ.isLoading;
-  const isError = parametersQ.isError;
+  const matrixCountsQ = useQuery({
+    queryKey: ["library", "matrices", "countsByParameter_fast"],
+    queryFn: async () => {
+      const res = await libraryApi.matrices.filter({
+        body: {
+          filterFrom: "parameterId",
+          textFilter: null,
+          otherFilters: [],
+          limit: 5000,
+        },
+      });
+      if (!res.success) throw new Error(res.error?.message ?? "Unknown API error");
+
+      const counts: Record<string, number> = {};
+      const rows = res.data ?? [];
+      for (const r of rows) counts[r.filterValue] = r.count;
+      return counts;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const isLoading = parametersAllQ.isLoading;
+  const isError = parametersAllQ.isError;
+
+  const onExcelFiltersChange = (next: ParametersExcelFiltersState) => {
+    setExcelFilters(next);
+    pagination.resetPage();
+  };
 
   return (
     <div className="space-y-4">
@@ -215,7 +251,9 @@ useEffect(() => {
           <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
           <div>
             <div className="text-sm font-medium text-foreground">{t("common.errorTitle")}</div>
-            <div className="text-sm text-muted-foreground">{t("library.parameters.errors.loadFailed")}</div>
+            <div className="text-sm text-muted-foreground">
+              {t("library.parameters.errors.loadFailed")}
+            </div>
           </div>
         </div>
       ) : null}
@@ -227,6 +265,10 @@ useEffect(() => {
               items={pageItems}
               selectedId={selectedParameter?.parameterId ?? null}
               onSelect={(p) => setSelectedParameter(p)}
+              matrixCounts={matrixCountsQ.data ?? {}}
+              matrixCountsLoading={matrixCountsQ.isLoading}
+              excelFilters={excelFilters}
+              onExcelFiltersChange={onExcelFiltersChange}
             />
 
             <div className="border-t p-3">
@@ -244,7 +286,7 @@ useEffect(() => {
           <ParameterDetailPanel
             selected={selectedParameter}
             onClose={() => setSelectedParameter(null)}
-            onSelectProtocolCode={() => {}}
+            onSelectProtocolId={() => {}}
           />
         </div>
       ) : null}
@@ -298,9 +340,7 @@ useEffect(() => {
               </div>
 
               {createParam.isError ? (
-                <div className="text-sm text-destructive">
-                  {t("library.parameters.create.error")}
-                </div>
+                <div className="text-sm text-destructive">{t("library.parameters.create.error")}</div>
               ) : null}
             </div>
           </div>

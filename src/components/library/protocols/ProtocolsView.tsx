@@ -6,13 +6,20 @@ import { Pagination } from "@/components/ui/pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { useProtocolsList, useCreateProtocol, type Protocol } from "@/api/library";
+import {
+  useCreateProtocol,
+  useProtocolsAll,
+  type Protocol,
+} from "@/api/library";
 
 import { LibraryHeader } from "../LibraryHeader";
 import { useServerPagination } from "../hooks/useServerPagination";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
-import { ProtocolsTable } from "./ProtocolsTable";
+import {
+  ProtocolsTable,
+  type ProtocolsExcelFiltersState,
+} from "./ProtocolsTable";
 import { ProtocolDetailModal } from "./ProtocolDetailModal";
 
 type CreateProtocolForm = {
@@ -34,6 +41,41 @@ function ProtocolsSkeleton() {
   );
 }
 
+function createEmptyFilters(): ProtocolsExcelFiltersState {
+  return {
+    protocolCode: [],
+    protocolSource: [],
+    accreditation: [],
+  };
+}
+
+function applyLocalFilters(items: Protocol[], f: ProtocolsExcelFiltersState) {
+  const matchStr = (value: string, selected: string[]) =>
+    selected.length ? selected.includes(value) : true;
+
+  const hasAccValue = (p: Protocol, selected: string[]) => {
+    if (selected.length === 0) return true;
+
+    const tags: string[] = [];
+    if (p.protocolAccreditation?.VILAS) tags.push("VILAS");
+    if (p.protocolAccreditation?.TDC) tags.push("TDC");
+    if (!p.protocolAccreditation?.VILAS && !p.protocolAccreditation?.TDC) tags.push("NONE");
+
+    return selected.some((x) => tags.includes(x));
+  };
+
+  return items.filter((p) => {
+    const code = p.protocolCode ?? "";
+    const source = p.protocolSource ?? "";
+
+    return (
+      matchStr(code, f.protocolCode) &&
+      matchStr(source, f.protocolSource) &&
+      hasAccValue(p, f.accreditation)
+    );
+  });
+}
+
 export function ProtocolsView() {
   const { t } = useTranslation();
 
@@ -53,36 +95,60 @@ export function ProtocolsView() {
   const [serverTotalPages, setServerTotalPages] = useState<number | null>(null);
   const pagination = useServerPagination(serverTotalPages, 10);
 
-  const listInput = useMemo(
+  const allInput = useMemo(
     () => ({
       query: {
-        page: pagination.currentPage,
-        itemsPerPage: pagination.itemsPerPage,
+        page: 1,
+        itemsPerPage: 5000,
         search: debouncedSearch.trim().length ? debouncedSearch.trim() : null,
       },
       sort: { column: "createdAt", direction: "DESC" as const },
     }),
-    [pagination.currentPage, pagination.itemsPerPage, debouncedSearch]
+    [debouncedSearch]
   );
 
-  const protocolsQ = useProtocolsList(listInput);
+  const protocolsAllQ = useProtocolsAll(allInput);
 
-  const pageItems = protocolsQ.data?.data ?? [];
-  const totalItems = protocolsQ.data?.meta?.total ?? 0;
-  const totalPages = protocolsQ.data?.meta?.totalPages ?? 1;
+  const allProtocols = useMemo(() => {
+    return (protocolsAllQ.data?.data ?? []) as Protocol[];
+  }, [protocolsAllQ.data]);
+
+  const [excelFilters, setExcelFilters] = useState<ProtocolsExcelFiltersState>(() =>
+    createEmptyFilters()
+  );
+
+  const filteredAll = useMemo(
+    () => applyLocalFilters(allProtocols, excelFilters),
+    [allProtocols, excelFilters]
+  );
+
+  const totalItems = filteredAll.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pagination.itemsPerPage));
+
+  useEffect(() => setServerTotalPages(totalPages), [totalPages]);
 
   useEffect(() => {
-    setServerTotalPages(totalPages);
-  }, [totalPages]);
-
-  useEffect(() => {
-    if (pagination.currentPage > totalPages) {
-      pagination.handlePageChange(totalPages);
-    }
+    if (pagination.currentPage > totalPages) pagination.handlePageChange(totalPages);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPages]);
 
+  const pageItems = useMemo(() => {
+    const start = (pagination.currentPage - 1) * pagination.itemsPerPage;
+    const end = start + pagination.itemsPerPage;
+    return filteredAll.slice(start, end);
+  }, [filteredAll, pagination.currentPage, pagination.itemsPerPage]);
+
   const createP = useCreateProtocol();
+
+  const onSearchChange = (v: string) => {
+    setSearchTerm(v);
+    pagination.resetPage();
+  };
+
+  const onExcelFiltersChange = (next: ProtocolsExcelFiltersState) => {
+    setExcelFilters(next);
+    pagination.resetPage();
+  };
 
   const openCreate = () => {
     setCreateForm({
@@ -117,8 +183,8 @@ export function ProtocolsView() {
     setCreateOpen(false);
   };
 
-  const isLoading = protocolsQ.isLoading;
-  const isError = protocolsQ.isError;
+  const isLoading = protocolsAllQ.isLoading;
+  const isError = protocolsAllQ.isError;
 
   return (
     <div className="space-y-4">
@@ -127,10 +193,7 @@ export function ProtocolsView() {
         subtitleKey="library.protocols.total"
         totalCount={totalItems}
         searchValue={searchTerm}
-        onSearchChange={(v) => {
-          setSearchTerm(v);
-          pagination.resetPage();
-        }}
+        onSearchChange={onSearchChange}
         onAdd={openCreate}
         addLabelKey="library.protocols.actions.add"
         searchPlaceholderKey="library.protocols.searchPlaceholder"
@@ -154,7 +217,12 @@ export function ProtocolsView() {
 
       {!isLoading && !isError ? (
         <div className="bg-background rounded-lg border border-border overflow-hidden">
-          <ProtocolsTable items={pageItems} onView={(p) => setSelected(p)} />
+          <ProtocolsTable
+            items={pageItems}
+            onView={(p) => setSelected(p)}
+            excelFilters={excelFilters}
+            onExcelFiltersChange={onExcelFiltersChange}
+          />
 
           <div className="border-t p-3">
             <Pagination
@@ -198,10 +266,7 @@ export function ProtocolsView() {
                 <Input
                   value={createForm.protocolCode}
                   onChange={(e) =>
-                    setCreateForm((s) => ({
-                      ...s,
-                      protocolCode: e.target.value,
-                    }))
+                    setCreateForm((s) => ({ ...s, protocolCode: e.target.value }))
                   }
                   placeholder={t("library.protocols.create.protocolCodePlaceholder")}
                 />
@@ -214,10 +279,7 @@ export function ProtocolsView() {
                 <Input
                   value={createForm.protocolSource}
                   onChange={(e) =>
-                    setCreateForm((s) => ({
-                      ...s,
-                      protocolSource: e.target.value,
-                    }))
+                    setCreateForm((s) => ({ ...s, protocolSource: e.target.value }))
                   }
                   placeholder={t("library.protocols.create.protocolSourcePlaceholder")}
                 />
@@ -233,10 +295,7 @@ export function ProtocolsView() {
                     type="button"
                     variant={createForm.accreditationVilas ? "default" : "outline"}
                     onClick={() =>
-                      setCreateForm((s) => ({
-                        ...s,
-                        accreditationVilas: !s.accreditationVilas,
-                      }))
+                      setCreateForm((s) => ({ ...s, accreditationVilas: !s.accreditationVilas }))
                     }
                   >
                     {t("library.protocols.create.protocolAccreditation.vilas")}
@@ -246,10 +305,7 @@ export function ProtocolsView() {
                     type="button"
                     variant={createForm.accreditationTdc ? "default" : "outline"}
                     onClick={() =>
-                      setCreateForm((s) => ({
-                        ...s,
-                        accreditationTdc: !s.accreditationTdc,
-                      }))
+                      setCreateForm((s) => ({ ...s, accreditationTdc: !s.accreditationTdc }))
                     }
                   >
                     {t("library.protocols.create.protocolAccreditation.tdc")}
@@ -258,11 +314,7 @@ export function ProtocolsView() {
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setCreateOpen(false)}
-                  type="button"
-                >
+                <Button variant="outline" onClick={() => setCreateOpen(false)} type="button">
                   {t("common.cancel")}
                 </Button>
                 <Button

@@ -11,7 +11,7 @@ type Props = {
   matrix: Matrix;
   expanded: boolean;
   onToggle: () => void;
-  onSelectProtocolCode: (protocolId: string) => void;
+  onSelectProtocolId: (protocolId: string) => void;
 };
 
 type EditState = {
@@ -27,7 +27,7 @@ function toNumberOrNull(v: string): number | null {
 
 export function MatricesAccordionItem(props: Props) {
   const { t } = useTranslation();
-  const { matrix, expanded, onToggle, onSelectProtocolCode } = props;
+  const { matrix, expanded, onToggle, onSelectProtocolId } = props;
 
   const updateM = useUpdateMatrix();
   const deleteM = useDeleteMatrix();
@@ -121,16 +121,24 @@ export function MatricesAccordionItem(props: Props) {
             <>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <div className="text-muted-foreground">{t("library.parameters.detail.feeBeforeTax")}</div>
+                  <div className="text-muted-foreground">
+                    {t("library.parameters.detail.feeBeforeTax")}
+                  </div>
                   <div className="font-medium text-foreground">
-                    {Number.isFinite(feeBeforeTaxNumber) ? feeBeforeTaxNumber.toLocaleString("vi-VN") : "-"}
+                    {Number.isFinite(feeBeforeTaxNumber)
+                      ? feeBeforeTaxNumber.toLocaleString("vi-VN")
+                      : "-"}
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-muted-foreground">{t("library.parameters.detail.feeAfterTax")}</div>
+                  <div className="text-muted-foreground">
+                    {t("library.parameters.detail.feeAfterTax")}
+                  </div>
                   <div className="font-medium text-foreground">
-                    {Number.isFinite(feeAfterTaxNumber) ? feeAfterTaxNumber.toLocaleString("vi-VN") : "-"}
+                    {Number.isFinite(feeAfterTaxNumber)
+                      ? feeAfterTaxNumber.toLocaleString("vi-VN")
+                      : "-"}
                   </div>
                 </div>
 
@@ -147,7 +155,7 @@ export function MatricesAccordionItem(props: Props) {
 
               <div className="pt-2 border-t border-border flex items-center justify-between gap-2">
                 <button
-                  onClick={() => onSelectProtocolCode(matrix.protocolId)}
+                  onClick={() => onSelectProtocolId(matrix.protocolId)}
                   className="text-xs text-primary hover:underline font-medium flex items-center gap-1"
                   type="button"
                   disabled={!matrix.protocolId}
@@ -186,7 +194,9 @@ export function MatricesAccordionItem(props: Props) {
             <>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">{t("library.parameters.detail.feeBeforeTax")}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("library.parameters.detail.feeBeforeTax")}
+                  </div>
                   <Input
                     value={edit.feeBeforeTax}
                     onChange={(e) => setEdit((s) => ({ ...s, feeBeforeTax: e.target.value }))}
@@ -194,7 +204,9 @@ export function MatricesAccordionItem(props: Props) {
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">{t("library.parameters.detail.feeAfterTax")}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("library.parameters.detail.feeAfterTax")}
+                  </div>
                   <Input
                     value={edit.feeAfterTax}
                     onChange={(e) => setEdit((s) => ({ ...s, feeAfterTax: e.target.value }))}
@@ -202,7 +214,9 @@ export function MatricesAccordionItem(props: Props) {
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">{t("library.matrices.turnaroundTime")}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("library.matrices.turnaroundTime")}
+                  </div>
                   <Input
                     value={edit.turnaroundTime}
                     onChange={(e) => setEdit((s) => ({ ...s, turnaroundTime: e.target.value }))}
@@ -214,7 +228,11 @@ export function MatricesAccordionItem(props: Props) {
                 <Button variant="outline" onClick={onCancel} type="button">
                   {t("common.cancel")}
                 </Button>
-                <Button onClick={() => void onSave()} disabled={!canSave || updateM.isPending} type="button">
+                <Button
+                  onClick={() => void onSave()}
+                  disabled={!canSave || updateM.isPending}
+                  type="button"
+                >
                   {updateM.isPending ? t("common.saving") : t("common.save")}
                 </Button>
               </div>

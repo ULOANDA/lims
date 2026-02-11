@@ -3,13 +3,16 @@ import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
 
 import { Pagination } from "@/components/ui/pagination";
-import { useSampleTypesList } from "@/api/library";
+import { useSampleTypesAll, type SampleType } from "@/api/library";
 
 import { LibraryHeader } from "../LibraryHeader";
 import { useServerPagination } from "../hooks/useServerPagination";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
-import { SampleTypesTable } from "./SampleTypesTable";
+import {
+  SampleTypesTable,
+  type SampleTypesExcelFiltersState,
+} from "./SampleTypesTable";
 import { SampleTypeCreateModal } from "./SampleTypeCreateModal";
 
 function Skeleton() {
@@ -24,8 +27,57 @@ function Skeleton() {
   );
 }
 
+function createEmptyFilters(): SampleTypesExcelFiltersState {
+  return {
+    sampleTypeId: [],
+    sampleTypeName: [],
+    displayTypeStyle: [],
+  };
+}
+
+function pickDisplayLabel(
+  lang: string,
+  displayTypeStyle: SampleType["displayTypeStyle"],
+  fallback: string
+): string {
+  const l = (lang || "vi").toLowerCase();
+  const en = displayTypeStyle && typeof displayTypeStyle === "object"
+    ? (displayTypeStyle as Record<string, unknown>).en
+    : undefined;
+  const vi = displayTypeStyle && typeof displayTypeStyle === "object"
+    ? (displayTypeStyle as Record<string, unknown>).vi
+    : undefined;
+
+  const enS = typeof en === "string" ? en : "";
+  const viS = typeof vi === "string" ? vi : "";
+
+  if (l.startsWith("vi")) return viS || enS || fallback;
+  return enS || viS || fallback;
+}
+
+function applyLocalFilters(
+  items: SampleType[],
+  f: SampleTypesExcelFiltersState,
+  lang: string
+) {
+  const matchStr = (value: string, selected: string[]) =>
+    selected.length ? selected.includes(value) : true;
+
+  return items.filter((x) => {
+    const id = x.sampleTypeId ?? "";
+    const name = x.sampleTypeName ?? "";
+    const display = pickDisplayLabel(lang, x.displayTypeStyle, x.sampleTypeName ?? "");
+
+    return (
+      matchStr(id, f.sampleTypeId) &&
+      matchStr(name, f.sampleTypeName) &&
+      matchStr(display, f.displayTypeStyle)
+    );
+  });
+}
+
 export function SampleTypesView() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
@@ -35,37 +87,56 @@ export function SampleTypesView() {
   const [serverTotalPages, setServerTotalPages] = useState<number | null>(null);
   const pagination = useServerPagination(serverTotalPages, 10);
 
-  const listInput = useMemo(
+  const allInput = useMemo(
     () => ({
       query: {
-        page: pagination.currentPage,
-        itemsPerPage: pagination.itemsPerPage,
+        page: 1,
+        itemsPerPage: 5000,
         search: debouncedSearch.trim().length ? debouncedSearch.trim() : null,
       },
       sort: { column: "createdAt", direction: "DESC" as const },
     }),
-    [pagination.currentPage, pagination.itemsPerPage, debouncedSearch]
+    [debouncedSearch]
   );
 
-  const q = useSampleTypesList(listInput);
+  const allQ = useSampleTypesAll(allInput);
 
-  const pageItems = q.data?.data ?? [];
-  const totalItems = q.data?.meta?.total ?? 0;
-  const totalPages = q.data?.meta?.totalPages ?? 1;
+  const allItems = useMemo(() => {
+    return (allQ.data?.data ?? []) as SampleType[];
+  }, [allQ.data]);
+
+  const [excelFilters, setExcelFilters] = useState<SampleTypesExcelFiltersState>(() =>
+    createEmptyFilters()
+  );
+
+  const filteredAll = useMemo(
+    () => applyLocalFilters(allItems, excelFilters, i18n.language),
+    [allItems, excelFilters, i18n.language]
+  );
+
+  const totalItems = filteredAll.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pagination.itemsPerPage));
+
+  useEffect(() => setServerTotalPages(totalPages), [totalPages]);
 
   useEffect(() => {
-    setServerTotalPages(totalPages);
-  }, [totalPages]);
-
-  useEffect(() => {
-    if (pagination.currentPage > totalPages) {
-      pagination.handlePageChange(totalPages);
-    }
+    if (pagination.currentPage > totalPages) pagination.handlePageChange(totalPages);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPages]);
 
-  const isLoading = q.isLoading;
-  const isError = q.isError;
+  const pageItems = useMemo(() => {
+    const start = (pagination.currentPage - 1) * pagination.itemsPerPage;
+    const end = start + pagination.itemsPerPage;
+    return filteredAll.slice(start, end);
+  }, [filteredAll, pagination.currentPage, pagination.itemsPerPage]);
+
+  const onExcelFiltersChange = (next: SampleTypesExcelFiltersState) => {
+    setExcelFilters(next);
+    pagination.resetPage();
+  };
+
+  const isLoading = allQ.isLoading;
+  const isError = allQ.isError;
 
   return (
     <div className="space-y-4">
@@ -101,7 +172,11 @@ export function SampleTypesView() {
 
       {!isLoading && !isError ? (
         <div className="bg-background rounded-lg border border-border overflow-hidden">
-          <SampleTypesTable items={pageItems} />
+          <SampleTypesTable
+            items={pageItems}
+            excelFilters={excelFilters}
+            onExcelFiltersChange={onExcelFiltersChange}
+          />
 
           <div className="border-t p-3">
             <Pagination
@@ -116,9 +191,7 @@ export function SampleTypesView() {
         </div>
       ) : null}
 
-      {createOpen ? (
-        <SampleTypeCreateModal onClose={() => setCreateOpen(false)} />
-      ) : null}
+      {createOpen ? <SampleTypeCreateModal onClose={() => setCreateOpen(false)} /> : null}
     </div>
   );
 }

@@ -353,7 +353,7 @@ export function ParameterGroupCreateModal(props: Props) {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <div className="text-sm font-medium text-foreground">
                 {t("library.parameterGroups.create.sampleType")}
               </div>
@@ -363,7 +363,17 @@ export function ParameterGroupCreateModal(props: Props) {
                 onChange={(e) =>
                   setForm((s) => ({ ...s, sampleTypeId: e.target.value }))
                 }
-                className="px-3 py-2 border rounded-lg text-sm bg-background text-foreground border-border focus:outline-none focus:ring-2 focus:ring-ring">
+                className={[
+                  "w-full min-w-0 max-w-full",
+                  "px-3 py-2 border rounded-lg text-sm",
+                  "bg-background text-foreground border-border",
+                  "focus:outline-none focus:ring-2 focus:ring-ring",
+                  "overflow-hidden text-ellipsis whitespace-nowrap",
+                ].join(" ")}
+                title={
+                  sampleTypes.find((x) => x.sampleTypeId === form.sampleTypeId)
+                    ?.sampleTypeName ?? ""
+                }>
                 <option value="">{t("common.select")}</option>
                 {sampleTypes.map((st) => (
                   <option key={st.sampleTypeId} value={st.sampleTypeId}>
@@ -384,7 +394,6 @@ export function ParameterGroupCreateModal(props: Props) {
               ) : null}
             </div>
           </div>
-
           <MultiSelectChips
             value={form.matrixIds}
             options={matrixOptions}

@@ -32,9 +32,19 @@ type Props = {
 
   onChange: (value: string | null) => void;
   listMaxHeightClassName?: string;
-
   resetKey?: string | number;
+
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+
+  filterMode?: "client" | "server";
+
+  allowCustomValue?: boolean;
 };
+
+function normalize(s: string) {
+  return s.trim();
+}
 
 export function SearchableSelect({
   value,
@@ -47,19 +57,47 @@ export function SearchableSelect({
   onChange,
   listMaxHeightClassName = "max-h-64",
   resetKey,
+  searchValue,
+  onSearchChange,
+  filterMode = "client",
+  allowCustomValue = false,
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
+  const [localSearch, setLocalSearch] = useState("");
+  const effectiveSearch = searchValue ?? localSearch;
+
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpen(false);
+    setLocalSearch("");
+    onSearchChange?.("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
 
   const selected = useMemo(
     () => options.find((o) => o.value === value) ?? null,
-    [options, value],
+    [options, value]
   );
+
+  const shouldFilter = filterMode === "client";
+
+  const normalizedSearch = useMemo(
+    () => normalize(effectiveSearch),
+    [effectiveSearch]
+  );
+
+  const hasExactOption = useMemo(() => {
+    if (normalizedSearch.length === 0) return false;
+    return options.some(
+      (o) =>
+        o.value.toLowerCase() === normalizedSearch.toLowerCase() ||
+        o.label.toLowerCase() === normalizedSearch.toLowerCase()
+    );
+  }, [options, normalizedSearch]);
+
+  const canCreateCustom =
+    allowCustomValue && normalizedSearch.length > 0 && !hasExactOption;
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -70,14 +108,14 @@ export function SearchableSelect({
           disabled={disabled}
           className={cn(
             "w-full justify-between bg-background",
-            !selected?.label && "text-muted-foreground",
+            !selected?.label && "text-muted-foreground"
           )}
         >
           {loading
             ? t("common.loading")
             : error
-              ? t("common.error")
-              : selected?.label ?? placeholder}
+            ? t("common.error")
+            : selected?.label ?? placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
         </Button>
       </PopoverPrimitive.Trigger>
@@ -88,30 +126,65 @@ export function SearchableSelect({
           side="bottom"
           sideOffset={6}
           collisionPadding={8}
-          className="z-50 w-[--radix-popover-trigger-width] rounded-md border border-border bg-popover p-0 shadow-md"
+          className="z-[200] w-[--radix-popover-trigger-width] rounded-md border border-border bg-popover p-0 shadow-md"
         >
-          <Command key={String(resetKey ?? "default")} shouldFilter>
-            <CommandInput placeholder={searchPlaceholder} />
+          <Command key={String(resetKey ?? "default")} shouldFilter={shouldFilter}>
+            <CommandInput
+              placeholder={searchPlaceholder}
+              value={effectiveSearch}
+              onValueChange={(v) => {
+                if (searchValue === undefined) setLocalSearch(v);
+                onSearchChange?.(v);
+              }}
+            />
+
             <CommandList className={cn("overflow-y-auto", listMaxHeightClassName)}>
-              <CommandEmpty>{t("common.noResults")}</CommandEmpty>
+              <CommandEmpty>
+                {loading ? t("common.loading") : t("common.noResults")}
+              </CommandEmpty>
 
               <CommandGroup>
+                {canCreateCustom ? (
+                  <CommandItem
+                    key={`__custom__:${normalizedSearch}`}
+                    value={shouldFilter ? normalizedSearch : "__custom__"}
+                    onSelect={() => {
+                      onChange(normalizedSearch);
+                      setOpen(false);
+
+                      if (searchValue === undefined) setLocalSearch("");
+                      onSearchChange?.("");
+                    }}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex flex-col">
+                      <span>{normalizedSearch}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {t("common.create")}
+                      </span>
+                    </div>
+                  </CommandItem>
+                ) : null}
+
                 {options.map((o) => (
                   <CommandItem
                     key={o.value}
-                    value={`${o.label} ${o.value} ${o.keywords ?? ""}`}
+                    value={
+                      shouldFilter ? `${o.label} ${o.value} ${o.keywords ?? ""}` : o.value
+                    }
                     onSelect={() => {
                       onChange(o.value);
                       setOpen(false);
+
+                      if (searchValue === undefined) setLocalSearch("");
+                      onSearchChange?.("");
                     }}
                     className="flex items-center justify-between"
                   >
                     <div className="flex flex-col">
                       <span>{o.label}</span>
                       {o.label !== o.value ? (
-                        <span className="text-xs text-muted-foreground">
-                          {o.value}
-                        </span>
+                        <span className="text-xs text-muted-foreground">{o.value}</span>
                       ) : null}
                     </div>
 
