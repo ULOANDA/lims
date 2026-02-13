@@ -1199,6 +1199,7 @@ export default {
       table: {
         identity: "Nhân viên",
         code: "Mã NV",
+        email: "Email",
         contact: "Liên hệ",
         position: "Chức vụ",
         department: "Phòng ban",

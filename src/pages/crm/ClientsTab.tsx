@@ -6,12 +6,31 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Filter, X, Check } from "lucide-react";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Pagination } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Tooltip,
   TooltipContent,
@@ -25,6 +44,8 @@ import type {
   ClientsCreateBody,
   ClientsUpdateBody,
 } from "@/types/crm/client";
+import type { ApiResponse } from "@/api/client";
+
 import { crmKeys } from "@/api/crm/crmKeys";
 import {
   clientsCreate,
@@ -32,6 +53,9 @@ import {
   clientsGetDetail,
   clientsGetList,
   clientsUpdate,
+  useClientsFilter,
+  type ClientsFilterFrom,
+  type ClientsFilterOtherFilter,
 } from "@/api/crm/clients";
 
 import { ClientDetailModal } from "@/components/crm/ClientDetailModal";
@@ -44,6 +68,8 @@ import {
   toClientUpdateBody,
   type ClientUpsertFormState,
 } from "@/components/crm/clientUpsertMapper";
+
+import { useDebouncedValue } from "@/components/library/hooks/useDebouncedValue";
 
 type Props = {
   externalSearch: string;
@@ -100,22 +126,31 @@ function useClientDetailOnHover(clientId: string) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
 
-  const cached = qc.getQueryData<ClientDetail>(
-    crmKeys.clients.detail(clientId)
-  );
+  const id = clientId.trim();
+
+  const cached = id.length
+    ? qc.getQueryData<ApiResponse<ClientDetail>>(crmKeys.clients.detail(id))
+    : undefined;
 
   const q = useQuery({
-    queryKey: crmKeys.clients.detail(clientId),
-    enabled: open && !cached,
-    queryFn: async () => clientsGetDetail({ params: { clientId } }),
+    queryKey: id.length
+      ? crmKeys.clients.detail(id)
+      : ["crm", "clients", "detail", "none"],
+    enabled: open && id.length > 0 && !cached,
+    placeholderData: keepPreviousData,
+    retry: false,
+    queryFn: async () => clientsGetDetail({ query: { clientId: id } }),
   });
+
+  const res = cached ?? q.data ?? null;
+  const detail = res?.success ? res.data : null;
 
   return {
     open,
     setOpen,
-    detail: cached ?? q.data ?? null,
+    detail,
     isLoading: q.isLoading,
-    isError: q.isError,
+    isError: q.isError || (res ? res.success === false : false),
   };
 }
 
@@ -274,6 +309,337 @@ function ContactsCompactLabel(props: {
   );
 }
 
+type ClientsExcelFiltersState = {
+  clientId: string[];
+  clientName: string[];
+  legalId: string[];
+  clientPhone: string[];
+  clientEmail: string[];
+  clientSaleScope: string[];
+};
+
+type FilterKey = keyof ClientsExcelFiltersState;
+type ApiFilterKey = FilterKey;
+
+const FILTER_FROM_MAP: Record<ApiFilterKey, ClientsFilterFrom> = {
+  clientId: "clientId",
+  clientName: "clientName",
+  legalId: "legalId",
+  clientPhone: "clientPhone",
+  clientEmail: "clientEmail",
+  clientSaleScope: "clientSaleScope",
+};
+
+function createEmptyFilters(): ClientsExcelFiltersState {
+  return {
+    clientId: [],
+    clientName: [],
+    legalId: [],
+    clientPhone: [],
+    clientEmail: [],
+    clientSaleScope: [],
+  };
+}
+
+function buildOtherFiltersForApi(
+  filters: ClientsExcelFiltersState,
+  excludeKey: ApiFilterKey
+): ClientsFilterOtherFilter[] {
+  const out: ClientsFilterOtherFilter[] = [];
+
+  (Object.keys(FILTER_FROM_MAP) as ApiFilterKey[]).forEach((k) => {
+    if (k === excludeKey) return;
+    const v = filters[k];
+    if (!Array.isArray(v) || v.length === 0) return;
+
+    out.push({
+      filterFrom: FILTER_FROM_MAP[k],
+      filterValues: v,
+    });
+  });
+
+  return out;
+}
+
+function buildAllOtherFiltersForApi(
+  filters: ClientsExcelFiltersState
+): ClientsFilterOtherFilter[] {
+  const out: ClientsFilterOtherFilter[] = [];
+
+  (Object.keys(FILTER_FROM_MAP) as ApiFilterKey[]).forEach((k) => {
+    const v = filters[k];
+    if (!Array.isArray(v) || v.length === 0) return;
+
+    out.push({
+      filterFrom: FILTER_FROM_MAP[k],
+      filterValues: v,
+    });
+  });
+
+  return out;
+}
+
+type OptionWithCount<T extends string> = { value: T; count: number };
+
+function pickValueForFilterKey(
+  item: ClientListItem,
+  key: ApiFilterKey
+): string {
+  if (key === "clientId") return item.clientId ?? "";
+  if (key === "clientName") return item.clientName ?? "";
+  if (key === "legalId") return item.legalId ?? "";
+  if (key === "clientPhone") return item.clientPhone ?? "";
+  if (key === "clientEmail") return item.clientEmail ?? "";
+  if (key === "clientSaleScope") return item.clientSaleScope ?? "";
+  return "";
+}
+
+function hasAnyExcelFilter(f: ClientsExcelFiltersState) {
+  return (
+    f.clientId.length > 0 ||
+    f.clientName.length > 0 ||
+    f.legalId.length > 0 ||
+    f.clientPhone.length > 0 ||
+    f.clientEmail.length > 0 ||
+    f.clientSaleScope.length > 0
+  );
+}
+
+type ExcelFilterPopoverProps = {
+  title: string;
+  filterKey: ApiFilterKey;
+  activeCount: number;
+  selected: string[];
+  excelFilters: ClientsExcelFiltersState;
+
+  onApply: (values: string[]) => void;
+  onClear: () => void;
+
+  itemsPerPage?: number;
+};
+
+function ExcelFilterPopover(props: ExcelFilterPopoverProps) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const [localSelected, setLocalSelected] = useState<string[]>(props.selected);
+
+  const filterFrom = FILTER_FROM_MAP[props.filterKey];
+
+  const input = useMemo(
+    () => ({
+      body: {
+        filterFrom,
+        textFilter: debouncedSearch.trim().length
+          ? debouncedSearch.trim()
+          : null,
+        otherFilters: buildOtherFiltersForApi(
+          props.excelFilters,
+          props.filterKey
+        ),
+        page: 1,
+        itemsPerPage: props.itemsPerPage ?? 200,
+      },
+    }),
+    [
+      filterFrom,
+      debouncedSearch,
+      props.excelFilters,
+      props.filterKey,
+      props.itemsPerPage,
+    ]
+  );
+
+  const q = useClientsFilter(input, { enabled: open });
+
+  const options = useMemo((): OptionWithCount<string>[] => {
+    const list = q.data?.data ?? [];
+    const counts = new Map<string, number>();
+
+    for (const it of list) {
+      const raw = pickValueForFilterKey(it, props.filterKey);
+      const v = typeof raw === "string" ? raw.trim() : "";
+      if (!v) continue;
+      counts.set(v, (counts.get(v) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => a.value.localeCompare(b.value));
+  }, [q.data, props.filterKey]);
+
+  const toggle = (v: string) => {
+    setLocalSelected((cur) =>
+      cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]
+    );
+  };
+
+  const apply = () => {
+    props.onApply(localSelected);
+    setOpen(false);
+  };
+
+  const clear = () => {
+    props.onClear();
+    setLocalSelected([]);
+    setSearch("");
+    setOpen(false);
+  };
+
+  const onOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) {
+      setLocalSelected(props.selected);
+      setSearch("");
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          type="button"
+          aria-label={t("common.filter")}
+          className="relative">
+          <Filter className="h-4 w-4" />
+          {props.activeCount > 0 ? (
+            <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
+          ) : null}
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent align="end" className="w-72 p-0">
+        <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+          <div className="text-sm font-medium text-foreground">
+            {props.title}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            onClick={() => setOpen(false)}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="p-3 space-y-2">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("common.search")}
+            className="border border-border"
+          />
+        </div>
+
+        <div className="border-t border-border">
+          <Command shouldFilter={false}>
+            <CommandList className="max-h-64">
+              {q.isLoading ? (
+                <div className="p-3 text-sm text-muted-foreground">
+                  {t("common.loading")}
+                </div>
+              ) : q.isError ? (
+                <div className="p-3 text-sm text-muted-foreground">
+                  {t("common.toast.failed")}
+                </div>
+              ) : options.length === 0 ? (
+                <CommandEmpty>{t("common.noData")}</CommandEmpty>
+              ) : null}
+
+              {!q.isLoading && !q.isError ? (
+                <CommandGroup>
+                  {options.map((o) => {
+                    const checked = localSelected.includes(o.value);
+                    return (
+                      <CommandItem
+                        key={`${filterFrom}::${o.value}`}
+                        value={o.value}
+                        onSelect={() => toggle(o.value)}
+                        className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-2 min-w-0">
+                          <span
+                            className={[
+                              "inline-flex h-4 w-4 min-w-4 flex-none shrink-0 items-center justify-center rounded-sm border border-border",
+                              checked
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-background",
+                            ].join(" ")}>
+                            {checked ? <Check className="h-3 w-3" /> : null}
+                          </span>
+
+                          <span className="text-sm text-foreground break-words whitespace-normal">
+                            {props.filterKey === "clientSaleScope"
+                              ? t(`crm.clients.saleScope.${o.value}`, {
+                                  defaultValue: o.value,
+                                })
+                              : o.value}
+                          </span>
+                        </div>
+
+                        <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                          {o.count}
+                        </span>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              ) : null}
+            </CommandList>
+          </Command>
+
+          <div className="p-3 border-t border-border flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={clear}
+              disabled={props.activeCount === 0}>
+              {t("common.clear")}
+            </Button>
+            <Button type="button" onClick={apply}>
+              {t("common.apply")}
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ThWithFilter(props: {
+  label: string;
+  filterKey: ApiFilterKey;
+  excelFilters: ClientsExcelFiltersState;
+  onExcelFiltersChange: (next: ClientsExcelFiltersState) => void;
+  itemsPerPageForOptions?: number;
+}) {
+  const { label, filterKey, excelFilters, onExcelFiltersChange } = props;
+
+  const setStr = (key: FilterKey, values: string[]) => {
+    onExcelFiltersChange({ ...excelFilters, [key]: values });
+  };
+
+  const activeCount = excelFilters[filterKey].length;
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      {label}
+      <ExcelFilterPopover
+        title={label}
+        filterKey={filterKey}
+        activeCount={activeCount}
+        selected={excelFilters[filterKey]}
+        excelFilters={excelFilters}
+        onApply={(v) => setStr(filterKey, v)}
+        onClear={() => setStr(filterKey, [])}
+        itemsPerPage={props.itemsPerPageForOptions}
+      />
+    </span>
+  );
+}
+
 export const ClientsTab = forwardRef<ClientsTabHandle, Props>(
   function ClientsTab(props, ref) {
     const { t } = useTranslation();
@@ -289,39 +655,105 @@ export const ClientsTab = forwardRef<ClientsTabHandle, Props>(
 
     const [selected, setSelected] = useState<ClientListItem | null>(null);
 
+    const [excelFilters, setExcelFilters] = useState<ClientsExcelFiltersState>(
+      () => createEmptyFilters()
+    );
+
     useImperativeHandle(ref, () => ({
       openCreate: () => setCreateOpen(true),
     }));
 
-    const query = useMemo(
+    const searchText = props.externalSearch.trim().length
+      ? props.externalSearch.trim()
+      : "";
+
+    const hasFilters = hasAnyExcelFilter(excelFilters);
+
+    const filterListInput = useMemo(() => {
+      const searchText = props.externalSearch.trim();
+
+      if (searchText.length > 0) {
+        return {
+          body: {
+            filterFrom: "clientName" as ClientsFilterFrom,
+            textFilter: searchText,
+            otherFilters: buildOtherFiltersForApi(excelFilters, "clientName"),
+            page,
+            itemsPerPage,
+          },
+        };
+      }
+
+      return {
+        body: {
+          filterFrom: "clientId" as ClientsFilterFrom,
+          textFilter: null,
+          otherFilters: buildAllOtherFiltersForApi(excelFilters),
+          page,
+          itemsPerPage,
+        },
+      };
+    }, [excelFilters, itemsPerPage, page, props.externalSearch]);
+
+    const listQuery = useMemo(
       () => ({
         page,
         itemsPerPage,
-        search:
-          props.externalSearch.trim().length > 0
-            ? props.externalSearch.trim()
-            : undefined,
+        search: searchText.length ? searchText : undefined,
       }),
-      [page, itemsPerPage, props.externalSearch]
+      [page, itemsPerPage, searchText]
     );
 
     const q = useQuery({
-      queryKey: crmKeys.clients.list(query),
+      queryKey: hasFilters
+        ? ["crm", "clients", "filter-list", filterListInput]
+        : crmKeys.clients.list(listQuery),
+      placeholderData: keepPreviousData,
+      retry: false,
       queryFn: async () => {
-        const res = (await clientsGetList({ query })) as ClientsListResponse;
-        return res;
+        if (!hasFilters) {
+          const res = (await clientsGetList({
+            query: listQuery,
+          })) as unknown as ClientsListResponse;
+          return res;
+        }
+        throw new Error("FILTER_LIST_USE_HOOK");
       },
     });
 
+    const filterListQ = useClientsFilter(filterListInput, {
+      enabled: hasFilters,
+    });
+
+    const items: ClientListItem[] = hasFilters
+      ? filterListQ.data?.data ?? []
+      : q.data?.data ?? [];
+
+    const totalCount = hasFilters
+      ? filterListQ.data?.meta?.total ?? items.length
+      : q.data?.pagination?.total ?? items.length;
+
+    const totalPages = hasFilters
+      ? filterListQ.data?.meta?.totalPages ?? 1
+      : q.data?.pagination?.totalPages ?? 1;
+
+    const listIsLoading = hasFilters ? filterListQ.isLoading : q.isLoading;
+    const listIsError = hasFilters ? filterListQ.isError : q.isError;
+    const listError = hasFilters ? filterListQ.error : q.error;
+
     const selectedClientId = selected?.clientId ?? null;
+    const selectedClientIdTrimmed = selectedClientId?.trim() ?? "";
 
     const detailQ = useQuery({
-      queryKey: selectedClientId
-        ? crmKeys.clients.detail(selectedClientId)
-        : ["crm", "clients", "detail", "none"],
-      enabled: !!selectedClientId && (detailOpen || editOpen),
+      queryKey:
+        selectedClientIdTrimmed.length > 0
+          ? crmKeys.clients.detail(selectedClientIdTrimmed)
+          : ["crm", "clients", "detail", "none"],
+      enabled: selectedClientIdTrimmed.length > 0 && (detailOpen || editOpen),
+      placeholderData: keepPreviousData,
+      retry: false,
       queryFn: async () =>
-        clientsGetDetail({ params: { clientId: selectedClientId! } }),
+        clientsGetDetail({ query: { clientId: selectedClientIdTrimmed } }),
     });
 
     const createMut = useMutation({
@@ -333,17 +765,14 @@ export const ClientsTab = forwardRef<ClientsTabHandle, Props>(
     });
 
     const deleteMut = useMutation({
-      mutationFn: (clientId: string) => clientsDelete({ params: { clientId } }),
+      mutationFn: (clientId: string) => clientsDelete({ body: { clientId } }),
     });
 
-    const items: ClientListItem[] = q.data?.data ?? [];
-    const totalCount = q.data?.pagination?.total ?? items.length;
-    const totalPages = q.data?.pagination?.totalPages ?? 1;
+    if (listIsLoading) return <CardSkeleton />;
 
-    if (q.isLoading) return <CardSkeleton />;
-
-    if (q.isError) {
-      const msg = q.error instanceof Error ? q.error.message : String(q.error);
+    if (listIsError) {
+      const msg =
+        listError instanceof Error ? listError.message : String(listError);
       return (
         <div className="bg-card rounded-lg border border-border p-4 flex items-center gap-2 text-sm text-destructive">
           <AlertCircle className="h-4 w-4" />
@@ -352,8 +781,9 @@ export const ClientsTab = forwardRef<ClientsTabHandle, Props>(
       );
     }
 
+    const detailRes = detailQ.data ?? null;
     const detailData: ClientDetail | ClientListItem | null =
-      detailQ.data ?? selected;
+      (detailRes && detailRes.success ? detailRes.data : null) ?? selected;
 
     return (
       <div className="space-y-3">
@@ -370,10 +800,19 @@ export const ClientsTab = forwardRef<ClientsTabHandle, Props>(
           onSubmit={async (values: ClientUpsertFormState) => {
             const body = toClientCreateBody(values);
 
-            await createMut.mutateAsync(body);
+            const res = await createMut.mutateAsync(body);
+            if (!res.success) {
+              toast.error(res.error?.message ?? t("common.error"));
+              return;
+            }
 
+            toast.success(t("common.toast.created"));
             await qc.invalidateQueries({ queryKey: crmKeys.clients.all });
-            await q.refetch();
+            await qc.invalidateQueries({
+              queryKey: ["crm", "clients", "filter-list"],
+            });
+            if (!hasFilters) await q.refetch();
+            else await filterListQ.refetch();
           }}
         />
 
@@ -386,14 +825,24 @@ export const ClientsTab = forwardRef<ClientsTabHandle, Props>(
             onSubmit={async (values: ClientUpsertFormState) => {
               const body = toClientUpdateBody(values);
 
-              await updateMut.mutateAsync(body);
+              const res = await updateMut.mutateAsync(body);
+              if (!res.success) {
+                toast.error(res.error?.message ?? t("common.error"));
+                return;
+              }
+
+              toast.success(t("common.toast.updated"));
 
               await qc.invalidateQueries({ queryKey: crmKeys.clients.all });
               await qc.invalidateQueries({
                 queryKey: crmKeys.clients.detail(body.clientId),
               });
+              await qc.invalidateQueries({
+                queryKey: ["crm", "clients", "filter-list"],
+              });
 
-              await q.refetch();
+              if (!hasFilters) await q.refetch();
+              else await filterListQ.refetch();
             }}
           />
         ) : null}
@@ -403,11 +852,20 @@ export const ClientsTab = forwardRef<ClientsTabHandle, Props>(
           clientId={selected?.clientId ?? null}
           onClose={() => setDeleteOpen(false)}
           onConfirm={async (clientId) => {
-            await deleteMut.mutateAsync(clientId);
+            const res = await deleteMut.mutateAsync(clientId);
+            if (!res.success) {
+              toast.error(res.error?.message ?? t("common.error"));
+              return;
+            }
 
             toast.success(t("common.toast.deleted"));
             await qc.invalidateQueries({ queryKey: crmKeys.clients.all });
-            await q.refetch();
+            await qc.invalidateQueries({
+              queryKey: ["crm", "clients", "filter-list"],
+            });
+
+            if (!hasFilters) await q.refetch();
+            else await filterListQ.refetch();
           }}
         />
 
@@ -415,6 +873,18 @@ export const ClientsTab = forwardRef<ClientsTabHandle, Props>(
           <Badge variant="outline" className="text-sm">
             {t("common.count")}: {totalCount || items.length}
           </Badge>
+
+          {hasFilters ? (
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                setExcelFilters(createEmptyFilters());
+                setPage(1);
+              }}>
+              {t("common.clear")}
+            </Button>
+          ) : null}
         </div>
 
         <div className="bg-card rounded-lg border border-border overflow-hidden">
@@ -423,13 +893,39 @@ export const ClientsTab = forwardRef<ClientsTabHandle, Props>(
               <thead className="bg-muted/50 border-b border-border">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {t("crm.clients.columns.clientId")}
+                    <ThWithFilter
+                      label={t("crm.clients.columns.clientId")}
+                      filterKey="clientId"
+                      excelFilters={excelFilters}
+                      onExcelFiltersChange={(next) => {
+                        setExcelFilters(next);
+                        setPage(1);
+                      }}
+                    />
                   </th>
+
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {t("crm.clients.columns.clientName")}
+                    <ThWithFilter
+                      label={t("crm.clients.columns.clientName")}
+                      filterKey="clientName"
+                      excelFilters={excelFilters}
+                      onExcelFiltersChange={(next) => {
+                        setExcelFilters(next);
+                        setPage(1);
+                      }}
+                    />
                   </th>
+
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {t("crm.clients.columns.legalId")}
+                    <ThWithFilter
+                      label={t("crm.clients.columns.legalId")}
+                      filterKey="legalId"
+                      excelFilters={excelFilters}
+                      onExcelFiltersChange={(next) => {
+                        setExcelFilters(next);
+                        setPage(1);
+                      }}
+                    />
                   </th>
 
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
