@@ -1,8 +1,20 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X, Save } from "lucide-react";
-import { useEffect, useMemo, useState, useMemo as useMemoReact } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Save, X } from "lucide-react";
+
+import type { ApiResponse } from "@/api/client";
+import { samplesGetList } from "@/api/samples";
+import { useMatricesList } from "@/api/library";
+import type { Matrix } from "@/api/library";
+import type { SampleListItem } from "@/types/sample";
+import type {
+  AnalysisListItem,
+  AnalysisResultStatusDb,
+  AnalysisStatusDb,
+} from "@/types/analysis";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,22 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import type { ApiResponse } from "@/api/client";
-import { samplesGetList } from "@/api/samples";
-import { useMatricesList } from "@/api/library";
-import type { Matrix } from "@/api/library";
-import type { SampleListItem } from "@/types/sample";
-
-import type {
-  AnalysisListItem,
-  AnalysisResultStatusDb,
-  AnalysisStatusDb,
-} from "@/types/analysis";
-
-import {
-  SearchableSelect,
-  type Option,
-} from "@/components/common/SearchableSelect";
+import { SearchableSelect, type Option } from "@/components/common/SearchableSelect";
 
 type FormValue = {
   sampleId: string;
@@ -68,13 +65,13 @@ const RESULT_STATUS_OPTIONS: AnalysisResultStatusDb[] = [
 ];
 
 function getAnalysisStatusLabelKey(
-  s: AnalysisStatusDb
+  s: AnalysisStatusDb,
 ): `lab.analyses.status.${AnalysisStatusDb}` {
   return `lab.analyses.status.${s}`;
 }
 
 function getAnalysisResultStatusLabelKey(
-  s: AnalysisResultStatusDb
+  s: AnalysisResultStatusDb,
 ): `lab.analyses.resultStatus.${AnalysisResultStatusDb}` {
   return `lab.analyses.resultStatus.${s}`;
 }
@@ -97,6 +94,31 @@ function assertSuccess<T>(res: ApiResponse<T>): T {
   return res.data as T;
 }
 
+function ensureSelectedOption(
+  options: Option[],
+  selectedValue: string,
+  makeOption: (v: string) => Option,
+): Option[] {
+  const v = selectedValue.trim();
+  if (!v) return options;
+  if (options.some((o) => o.value === v)) return options;
+  return [makeOption(v), ...options];
+}
+
+function getSampleIdSafe(s: SampleListItem): string | null {
+  const maybe = s as unknown as { sampleId?: unknown };
+  return typeof maybe.sampleId === "string" && maybe.sampleId.trim().length
+    ? maybe.sampleId
+    : null;
+}
+
+function getSampleReceiptIdSafe(s: SampleListItem): string | null {
+  const maybe = s as unknown as { receiptId?: unknown };
+  return typeof maybe.receiptId === "string" && maybe.receiptId.trim().length
+    ? maybe.receiptId
+    : null;
+}
+
 export function AnalysisUpdateModal({
   open,
   onClose,
@@ -106,139 +128,132 @@ export function AnalysisUpdateModal({
 }: Props) {
   const { t } = useTranslation();
 
-  const initial = useMemo<FormValue>(() => {
-    return {
-      sampleId: "",
-      matrixId: null,
-      parameterId: null,
-      parameterName: null,
-      analysisStatus: "Pending",
-      analysisResult: null,
-      analysisResultStatus: "NotEvaluated",
-      analysisCompletedAt: null,
-    };
-  }, []);
-
   const qSamples = useQuery({
     queryKey: ["samples", "list", "analysisUpdate"],
     enabled: open,
     placeholderData: keepPreviousData,
     queryFn: async () =>
-      assertSuccess(
-        await samplesGetList({ query: { page: 1, itemsPerPage: 200 } })
-      ),
+      assertSuccess(await samplesGetList({ query: { page: 1, itemsPerPage: 200 } })),
   });
 
   const qMatrices = useMatricesList(
     { query: { page: 1, itemsPerPage: 200 } },
-    { enabled: open }
+    { enabled: open },
   );
 
   const samples = qSamples.data ?? [];
   const matrices = qMatrices.data?.data ?? [];
 
-  const sampleOptions: Option[] = useMemoReact(() => {
-    return samples.map((s: SampleListItem) => {
-      const id = (s as unknown as { sampleId: string }).sampleId;
-      const receiptId =
-        (s as unknown as { receiptId?: string | null }).receiptId ?? "";
-      return { value: id, label: id, keywords: receiptId };
-    });
-  }, [samples]);
-
-  const matrixOptions: Option[] = useMemoReact(() => {
-    return matrices.map((m: Matrix) => {
-      const label =
-        `${m.matrixId}` +
-        (m.parameterName ? ` - ${m.parameterName}` : "") +
-        (m.protocolCode ? ` (${m.protocolCode})` : "");
-      const keywords = `${m.parameterId} ${m.parameterName ?? ""} ${
-        m.protocolCode ?? ""
-      }`;
-      return { value: m.matrixId, label, keywords };
-    });
-  }, [matrices]);
-
-  const [sampleId, setSampleId] = useState(initial.sampleId);
+  const [sampleId, setSampleId] = useState<string>("");
   const [matrixId, setMatrixId] = useState<string>("");
+
   const [parameterId, setParameterId] = useState<string>("");
   const [parameterName, setParameterName] = useState<string>("");
 
-  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatusDb>(
-    initial.analysisStatus
-  );
+  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatusDb>("Pending");
   const [analysisResultStatus, setAnalysisResultStatus] = useState<
     AnalysisResultStatusDb | ""
-  >(initial.analysisResultStatus ?? "");
+  >("NotEvaluated");
 
   const [analysisResult, setAnalysisResult] = useState<string>("");
-  const [analysisCompletedAtDate, setAnalysisCompletedAtDate] =
-    useState<string>("");
+  const [analysisCompletedAtDate, setAnalysisCompletedAtDate] = useState<string>("");
 
-  const [resetKey, setResetKey] = useState(0);
+  const [resetKey, setResetKey] = useState<number>(0);
 
   const canSubmit = Boolean(target?.analysisId) && sampleId.trim().length > 0;
 
-  function applyMatrix(id: string) {
+  function applyMatrixIfReady(id: string) {
     const m = matrices.find((x) => x.matrixId === id);
-    setParameterId(m?.parameterId ?? "");
-    setParameterName(m?.parameterName ?? "");
+    if (!m) return;
+    setParameterId(m.parameterId ?? "");
+    setParameterName(m.parameterName ?? "");
   }
 
   useEffect(() => {
-    if (!open) return;
-    if (!target) return;
+    if (!open || !target) return;
 
     setSampleId(target.sampleId ?? "");
 
     const mId = target.matrixId ?? "";
     setMatrixId(mId);
 
-    if (mId) {
-      applyMatrix(mId);
-    } else {
-      setParameterId(target.parameterId ?? "");
-      setParameterName(target.parameterName ?? "");
-    }
+    setParameterId(target.parameterId ?? "");
+    setParameterName(target.parameterName ?? "");
 
-    setAnalysisStatus(
-      (String(target.analysisStatus) as AnalysisStatusDb) || "Pending"
-    );
+    setAnalysisStatus((String(target.analysisStatus) as AnalysisStatusDb) || "Pending");
 
     setAnalysisResultStatus(
       target.analysisResultStatus
         ? (String(target.analysisResultStatus) as AnalysisResultStatusDb)
-        : ""
+        : "",
     );
 
-    setAnalysisResult(
-      target.analysisResult == null ? "" : String(target.analysisResult)
-    );
+    setAnalysisResult(target.analysisResult == null ? "" : String(target.analysisResult));
 
     setAnalysisCompletedAtDate(
-      target.analysisCompletedAt
-        ? isoToDateOnly(String(target.analysisCompletedAt))
-        : ""
+      target.analysisCompletedAt ? isoToDateOnly(String(target.analysisCompletedAt)) : "",
     );
-
-    setResetKey((k) => k + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, target]);
 
   useEffect(() => {
     if (!open) return;
     if (!matrixId) return;
     if (!matrices.length) return;
-    applyMatrix(matrixId);
+
+    applyMatrixIfReady(matrixId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, matrixId, matrices.length]);
+  }, [open, matrixId, matrices]);
+
+  const readyOptions =
+    open &&
+    !!target &&
+    !qSamples.isLoading &&
+    !qSamples.isError &&
+    !qMatrices.isLoading &&
+    !qMatrices.isError;
+
+  useEffect(() => {
+    if (!readyOptions) return;
+    setResetKey((k) => k + 1);
+  }, [readyOptions]);
+
+  function isOption(v: Option | null): v is Option {
+    return v !== null;
+  }
+  const sampleOptions: Option[] = useMemo(() => {
+    const base = samples
+      .map((s): Option | null => {
+        const id = getSampleIdSafe(s);
+        if (!id) return null;
+  
+        const receiptId = getSampleReceiptIdSafe(s) ?? "";
+        return { value: id, label: id, keywords: receiptId };
+      })
+      .filter(isOption);
+  
+    return ensureSelectedOption(base, sampleId, (v) => ({ value: v, label: v }));
+  }, [samples, sampleId]);
+  
+  const matrixOptions: Option[] = useMemo(() => {
+    const base: Option[] = matrices.map((m: Matrix) => {
+      const label =
+        `${m.matrixId}` +
+        (m.parameterName ? ` - ${m.parameterName}` : "") +
+        (m.protocolCode ? ` (${m.protocolCode})` : "");
+
+      const keywords = `${m.parameterId ?? ""} ${m.parameterName ?? ""} ${m.protocolCode ?? ""}`.trim();
+
+      return { value: m.matrixId, label, keywords };
+    });
+
+    return ensureSelectedOption(base, matrixId, (v) => ({ value: v, label: v }));
+  }, [matrices, matrixId]);
 
   return (
-    <DialogPrimitive.Root
-      open={open}
-      onOpenChange={(v) => (!v ? onClose() : null)}>
+    <DialogPrimitive.Root open={open} onOpenChange={(v) => (!v ? onClose() : null)}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 bg-black/50 z-50" />
+
         <DialogPrimitive.Content className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-2xl mx-auto bg-card rounded-lg shadow-xl z-50 border border-border">
           <div className="p-6 border-b border-border flex items-start justify-between gap-4">
             <div>
@@ -249,11 +264,13 @@ export function AnalysisUpdateModal({
                 {target?.analysisId ?? "-"}
               </DialogPrimitive.Description>
             </div>
+
             <Button
               variant="ghost"
               size="icon"
               onClick={onClose}
-              aria-label={t("common.close")}>
+              aria-label={String(t("common.close"))}
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -269,8 +286,8 @@ export function AnalysisUpdateModal({
                   qSamples.isLoading
                     ? t("common.loading")
                     : qSamples.isError
-                    ? t("common.error")
-                    : t("common.select")
+                      ? t("common.error")
+                      : t("common.select")
                 }
                 searchPlaceholder={t("common.search")}
                 loading={qSamples.isLoading}
@@ -291,8 +308,8 @@ export function AnalysisUpdateModal({
                   qMatrices.isLoading
                     ? t("common.loading")
                     : qMatrices.isError
-                    ? t("common.error")
-                    : t("common.select")
+                      ? t("common.error")
+                      : t("common.select")
                 }
                 searchPlaceholder={t("common.search")}
                 loading={qMatrices.isLoading}
@@ -301,11 +318,13 @@ export function AnalysisUpdateModal({
                 onChange={(v) => {
                   const id = v ?? "";
                   setMatrixId(id);
-                  if (id) applyMatrix(id);
-                  else {
+
+                  if (!id) {
                     setParameterId("");
                     setParameterName("");
+                    return;
                   }
+                  if (matrices.length) applyMatrixIfReady(id);
                 }}
                 listMaxHeightClassName="max-h-72"
               />
@@ -335,7 +354,8 @@ export function AnalysisUpdateModal({
               <Label>{t("lab.analyses.analysisStatus")}</Label>
               <Select
                 value={analysisStatus}
-                onValueChange={(v) => setAnalysisStatus(v as AnalysisStatusDb)}>
+                onValueChange={(v) => setAnalysisStatus(v as AnalysisStatusDb)}
+              >
                 <SelectTrigger className="bg-background">
                   <SelectValue placeholder={t("common.select")} />
                 </SelectTrigger>
@@ -353,9 +373,8 @@ export function AnalysisUpdateModal({
               <Label>{t("lab.analyses.analysisResultStatus")}</Label>
               <Select
                 value={analysisResultStatus}
-                onValueChange={(v) =>
-                  setAnalysisResultStatus(v as AnalysisResultStatusDb | "")
-                }>
+                onValueChange={(v) => setAnalysisResultStatus(v as AnalysisResultStatusDb | "")}
+              >
                 <SelectTrigger className="bg-background">
                   <SelectValue placeholder={t("common.select")} />
                 </SelectTrigger>
@@ -410,12 +429,12 @@ export function AnalysisUpdateModal({
                   parameterName: toNullIfBlank(parameterName),
                   analysisStatus,
                   analysisResult: toNullIfBlank(analysisResult),
-                  analysisResultStatus:
-                    analysisResultStatus === "" ? null : analysisResultStatus,
+                  analysisResultStatus: analysisResultStatus === "" ? null : analysisResultStatus,
                   analysisCompletedAt: completedAt,
                 });
               }}
-              className="flex items-center gap-2">
+              className="flex items-center gap-2"
+            >
               <Save className="h-4 w-4" />
               {t("common.save")}
             </Button>

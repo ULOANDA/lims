@@ -788,10 +788,10 @@ export default {
       samplingInfo: "Thông tin lấy mẫu hiện trường",
       physicalState: "Trạng thái vật lý",
       status: {
-        Received: "Chờ xử lý",
-        Analyzing: "Đang thực hiện",
-        Stored: "Lưu kho",
-        Disposed: "Đã hủy",
+        received: "Chờ xử lý",
+        analyzing: "Đang thực hiện",
+        stored: "Lưu kho",
+        disposed: "Đã hủy",
       },
       placeholders: {
         receiptId: "Nhập mã phiếu...",

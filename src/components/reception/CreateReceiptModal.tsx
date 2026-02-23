@@ -347,8 +347,16 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
 
   const handlePickClient = async (clientId: string) => {
     try {
-      const detail = await clientsGetDetail({ params: { clientId } });
-      applyClientDetailToForms(detail);
+      const res = await clientsGetDetail({ query: { clientId } });
+
+      if (!res.success || !res.data) {
+        toast.error(t("common.requestFailed"), {
+          description: res.error?.message ?? t("common.tryAgain"),
+        });
+        return;
+      }
+
+      applyClientDetailToForms(res.data);
       setClientSuggestOpen(false);
       toast.success(t("common.success"));
     } catch (e) {
@@ -766,7 +774,9 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                             setBasic({ ...basic, taxCode: e.target.value })
                           }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("crm.clients.sections.invoice.taxCodePlaceholder")}
+                          placeholder={t(
+                            "crm.clients.sections.invoice.taxCodePlaceholder"
+                          )}
                         />
                       </div>
 
@@ -780,7 +790,9 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                             setBasic({ ...basic, taxName: e.target.value })
                           }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("crm.clients.sections.invoice.taxNamePlaceholder")}
+                          placeholder={t(
+                            "crm.clients.sections.invoice.taxNamePlaceholder"
+                          )}
                         />
                       </div>
 
@@ -794,7 +806,9 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                             setBasic({ ...basic, taxEmail: e.target.value })
                           }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("crm.clients.sections.invoice.taxEmailPlaceholder")}
+                          placeholder={t(
+                            "crm.clients.sections.invoice.taxEmailPlaceholder"
+                          )}
                         />
                       </div>
 
@@ -809,7 +823,9 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                           }
                           className="mt-1 text-sm bg-background border border-border"
                           rows={3}
-                          placeholder={t("crm.clients.sections.invoice.taxAddressPlaceholder")}
+                          placeholder={t(
+                            "crm.clients.sections.invoice.taxAddressPlaceholder"
+                          )}
                         />
                       </div>
                     </div>
@@ -838,7 +854,9 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                             setBasic({ ...basic, contactName: e.target.value })
                           }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("crm.clients.sections.contacts.fields.contactNamePlaceholder")}
+                          placeholder={t(
+                            "crm.clients.sections.contacts.fields.contactNamePlaceholder"
+                          )}
                         />
                       </div>
 
@@ -854,7 +872,9 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                             setBasic({ ...basic, contactPhone: e.target.value })
                           }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("crm.clients.sections.contacts.fields.contactPhonePlaceholder")}
+                          placeholder={t(
+                            "crm.clients.sections.contacts.fields.contactPhonePlaceholder"
+                          )}
                         />
                       </div>
 
@@ -870,7 +890,9 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                             setBasic({ ...basic, contactEmail: e.target.value })
                           }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("crm.clients.sections.contacts.fields.contactEmailPlaceholder")}
+                          placeholder={t(
+                            "crm.clients.sections.contacts.fields.contactEmailPlaceholder"
+                          )}
                         />
                       </div>
 
@@ -889,7 +911,9 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                             })
                           }
                           className="mt-1 h-8 text-sm bg-background border border-border"
-                          placeholder={t("crm.clients.sections.contacts.fields.contactPositionPlaceholder")}
+                          placeholder={t(
+                            "crm.clients.sections.contacts.fields.contactPositionPlaceholder"
+                          )}
                         />
                       </div>
 
@@ -909,7 +933,9 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
                           }
                           className="mt-1 text-sm bg-background border border-border"
                           rows={3}
-                          placeholder={t("crm.clients.sections.contacts.fields.contactAddressPlaceholder")}
+                          placeholder={t(
+                            "crm.clients.sections.contacts.fields.contactAddressPlaceholder"
+                          )}
                         />
                       </div>
                     </div>

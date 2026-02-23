@@ -1,46 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, AlertCircle, Check, ChevronsUpDown } from "lucide-react";
-
-import * as PopoverPrimitive from "@radix-ui/react-popover";
+import { Plus, Search, AlertCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
+import { SampleDetailModal } from "@/components/samples/SampleDetailModal";
+import { SampleUpsertModal } from "@/components/samples/SampleUpsertModal";
+import { SampleDeleteModal } from "@/components/samples/SampleDeleteModal";
 
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+  samplesGetAllPages,
+  samplesKeys,
+  useSamplesAll,
+  useSamplesList,
+} from "@/api/samples";
+import type { SampleListItem, SampleStatus } from "@/types/sample";
 
-import type { ApiResponse } from "@/api/client";
-import { samplesGetList } from "@/api/samples";
-import { samplesKeys } from "@/api/samplesKeys";
+import { useServerPagination } from "@/components/library/hooks/useServerPagination";
+import { useDebouncedValue } from "@/components/library/hooks/useDebouncedValue";
 
-import { receiptsGetList } from "@/api/receipts";
-import type { ReceiptListItem } from "@/types/receipt";
-
-import type {
-  SampleListItem,
-  SamplesGetListInput,
-  SampleStatus,
-} from "@/types/sample";
-
-import { RowActionIcons } from "../common/RowActionIcons";
-import { useQuery } from "@tanstack/react-query";
-import { SampleDetailModal } from "../samples/SampleDetailModal";
-import { SampleUpsertModal } from "../samples/SampleUpsertModal";
+import {
+  SamplesTable,
+  type SamplesExcelFiltersState,
+} from "../samples/SamplesTable";
+import { useQueryClient } from "@tanstack/react-query";
 
 function Skeleton() {
   return (
@@ -54,320 +39,253 @@ function Skeleton() {
   );
 }
 
-function StatusBadge({ status }: { status?: string | null }) {
-  const { t } = useTranslation();
+function createEmptyFilters(): SamplesExcelFiltersState {
+  return {
+    receiptId: [],
+    sampleStatus: [],
+    sampleTypeName: [],
+  };
+}
 
-  if (!status) {
+function applyLocalFilters(
+  items: SampleListItem[],
+  f: SamplesExcelFiltersState
+): SampleListItem[] {
+  const matchStr = (value: string, selected: string[]) =>
+    selected.length ? selected.includes(value) : true;
+
+  const matchStatus = (value: string, selected: SampleStatus[]) =>
+    selected.length ? selected.includes(value as SampleStatus) : true;
+
+  return items.filter((s) => {
+    const receiptId = s.receiptId ?? "";
+    const typeName = s.sampleTypeName ?? "";
+    const st = s.sampleStatus ?? "";
     return (
-      <Badge variant="outline" className="text-xs">
-        {t("common.noData")}
-      </Badge>
+      matchStr(receiptId, f.receiptId) &&
+      matchStr(typeName, f.sampleTypeName) &&
+      matchStatus(st, f.sampleStatus)
     );
-  }
+  });
+}
 
-  if (status === "Stored") {
-    return (
-      <Badge variant="success" className="text-xs">
-        {t("lab.samples.status.Stored")}
-      </Badge>
-    );
-  }
-
-  if (status === "Analyzing") {
-    return (
-      <Badge variant="warning" className="text-xs">
-        {t("lab.samples.status.Analyzing")}
-      </Badge>
-    );
-  }
-
-  if (status === "Received") {
-    return (
-      <Badge variant="secondary" className="text-xs">
-        {t("lab.samples.status.Received")}
-      </Badge>
-    );
-  }
-
-  if (status === "Disposed") {
-    return (
-      <Badge variant="destructive" className="text-xs">
-        {t("lab.samples.status.Disposed")}
-      </Badge>
-    );
-  }
-
+function hasAnyExcelFilter(f: SamplesExcelFiltersState): boolean {
   return (
-    <Badge variant="outline" className="text-xs">
-      {status}
-    </Badge>
+    (f.receiptId?.length ?? 0) > 0 ||
+    (f.sampleTypeName?.length ?? 0) > 0 ||
+    (f.sampleStatus?.length ?? 0) > 0
   );
 }
 
-const STATUS_ALL = "__ALL__" as const;
-type StatusFilterValue = typeof STATUS_ALL | SampleStatus;
-
 export function StoredSamples() {
   const { t } = useTranslation();
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const [receiptSearch, setReceiptSearch] = useState("");
-  const [debouncedReceiptSearch, setDebouncedReceiptSearch] = useState("");
-  const [receiptIdFilter, setReceiptIdFilter] = useState<string>("");
-  const [receiptOpen, setReceiptOpen] = useState(false);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  useEffect(() => {
-    const v = receiptSearch.trim();
-    const tmr = window.setTimeout(() => {
-      setDebouncedReceiptSearch(v);
-    }, 300);
-    return () => window.clearTimeout(tmr);
-  }, [receiptSearch]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
 
-  const [status, setStatus] = useState<StatusFilterValue>(STATUS_ALL);
+  const [excelFilters, setExcelFilters] = useState<SamplesExcelFiltersState>(
+    () => createEmptyFilters()
+  );
 
-  const [page, setPage] = useState(1);
+  const excelFiltering = useMemo(
+    () => hasAnyExcelFilter(excelFilters),
+    [excelFilters]
+  );
+
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
+
+  const [serverTotalPages, setServerTotalPages] = useState<number | null>(null);
+  const pagination = useServerPagination(serverTotalPages, 10);
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [upsertOpen, setUpsertOpen] = useState(false);
   const [upsertMode, setUpsertMode] = useState<"create" | "update">("create");
   const [selected, setSelected] = useState<SampleListItem | null>(null);
 
-  function toDash(v: unknown, dash = t("common.noData")): string {
-    if (typeof v === "string") {
-      const s = v.trim();
-      return s.length > 0 ? s : dash;
-    }
-    if (v == null) return dash;
-    return String(v);
-  }
-  const receiptOptionsQuery = useMemo(
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const baseInput = useMemo(
+    () => ({
+      query: {
+        search: debouncedSearch.trim().length ? debouncedSearch.trim() : null,
+      },
+      sort: { column: "createdAt", direction: "DESC" as const },
+    }),
+    [debouncedSearch]
+  );
+
+  const listInput = useMemo(
+    () => ({
+      query: {
+        page: pagination.currentPage,
+        itemsPerPage: pagination.itemsPerPage,
+        search: baseInput.query.search,
+      },
+      sort: baseInput.sort,
+    }),
+    [
+      baseInput.query.search,
+      baseInput.sort,
+      pagination.currentPage,
+      pagination.itemsPerPage,
+    ]
+  );
+
+  const samplesListQ = useSamplesList(listInput, { enabled: !excelFiltering });
+  const allInput = useMemo(
     () => ({
       query: {
         page: 1,
-        itemsPerPage: 50,
-        search:
-          debouncedReceiptSearch.length > 0
-            ? debouncedReceiptSearch
-            : undefined,
+        itemsPerPage: 5000,
+        search: baseInput.query.search,
       },
-      sort: {},
+      sort: baseInput.sort,
     }),
-    [debouncedReceiptSearch]
+    [baseInput.query.search, baseInput.sort]
   );
 
-  const receiptsQ = useQuery<ApiResponse<ReceiptListItem[]>, Error>({
-    queryKey: [
-      "operations",
-      "receipts",
-      "list",
-      receiptOptionsQuery.query?.search ?? "",
-      receiptOptionsQuery.query?.itemsPerPage ?? 50,
-    ],
-    enabled: debouncedReceiptSearch.length > 0,
-    queryFn: async () => {
-      const res = await receiptsGetList(receiptOptionsQuery);
-      if (!res.success) throw new Error(res.error?.message ?? "Request failed");
-      return res;
-    },
-    placeholderData: (prev) => prev,
-  });
+  const samplesAllQ = useSamplesAll(allInput, { enabled: excelFiltering });
+  useEffect(() => {
+    void qc.prefetchQuery({
+      queryKey: samplesKeys.allPages(allInput),
+      queryFn: () => samplesGetAllPages(allInput),
+      staleTime: 5 * 60 * 1000,
+    });
+  }, [qc, allInput]);
 
-  const receiptOptions = receiptsQ.data?.data ?? [];
+  const allItems = useMemo(() => {
+    if (!excelFiltering) return [] as SampleListItem[];
+    return (samplesAllQ.data?.data ?? []) as SampleListItem[];
+  }, [excelFiltering, samplesAllQ.data]);
 
-  const listInput: SamplesGetListInput = useMemo(
-    () => ({
-      query: {
-        page,
-        itemsPerPage,
-        receiptId:
-          receiptIdFilter.trim().length > 0
-            ? receiptIdFilter.trim()
-            : undefined,
-        status: status === STATUS_ALL ? undefined : status,
-      },
-      sort: {},
-    }),
-    [page, itemsPerPage, receiptIdFilter, status]
-  );
+  const filteredByExcel = useMemo(() => {
+    if (!excelFiltering) return allItems;
+    return applyLocalFilters(allItems, excelFilters);
+  }, [excelFiltering, allItems, excelFilters]);
 
-  const listQ = useQuery<ApiResponse<SampleListItem[]>, Error>({
-    queryKey: samplesKeys.list(
-      (listInput.query ?? {}) as Record<string, unknown>,
-      (listInput.sort ?? {}) as Record<string, unknown>
-    ),
-    queryFn: async () => {
-      const res = await samplesGetList(listInput);
-      if (!res.success) throw new Error(res.error?.message ?? "Request failed");
-      return res;
-    },
-    placeholderData: (prev) => prev,
-  });
+  const listItems = useMemo(() => {
+    if (excelFiltering) return [] as SampleListItem[];
+    return (samplesListQ.data?.data ?? []) as SampleListItem[];
+  }, [excelFiltering, samplesListQ.data]);
 
-  const items = listQ.data?.data ?? [];
-  const totalItems = listQ.data?.meta?.total ?? 0;
-  const totalPages = listQ.data?.meta?.totalPages ?? 1;
+  const totalItems = useMemo(() => {
+    if (excelFiltering) return filteredByExcel.length;
+    return (samplesListQ.data?.meta?.total ?? 0) as number;
+  }, [excelFiltering, filteredByExcel.length, samplesListQ.data?.meta?.total]);
 
-  const onOpenDetail = (row: SampleListItem) => {
+  const totalPages = useMemo(() => {
+    if (excelFiltering) {
+      return Math.max(1, Math.ceil(totalItems / pagination.itemsPerPage));
+    }
+    return (samplesListQ.data?.meta?.totalPages ?? 1) as number;
+  }, [
+    excelFiltering,
+    totalItems,
+    pagination.itemsPerPage,
+    samplesListQ.data?.meta?.totalPages,
+  ]);
+
+  useEffect(() => {
+    setServerTotalPages(totalPages);
+  }, [totalPages]);
+
+  useEffect(() => {
+    if (pagination.currentPage > totalPages) {
+      pagination.handlePageChange(totalPages);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPages]);
+
+  const pageItems = useMemo(() => {
+    if (!excelFiltering) {
+      return listItems;
+    }
+    const start = (pagination.currentPage - 1) * pagination.itemsPerPage;
+    const end = start + pagination.itemsPerPage;
+    return filteredByExcel.slice(start, end);
+  }, [
+    excelFiltering,
+    listItems,
+    filteredByExcel,
+    pagination.currentPage,
+    pagination.itemsPerPage,
+  ]);
+
+  const isLoading = excelFiltering
+    ? samplesAllQ.isLoading
+    : samplesListQ.isLoading;
+  const isError = excelFiltering ? samplesAllQ.isError : samplesListQ.isError;
+
+  const onSearchChange = (v: string) => {
+    setSearchTerm(v);
+    pagination.resetPage();
+  };
+
+  const onExcelFiltersChange = (next: SamplesExcelFiltersState) => {
+    setExcelFilters(next);
+    pagination.resetPage();
+  };
+
+  const findRowById = (sampleId: string): SampleListItem | null => {
+    const inPage = pageItems.find((x) => x.sampleId === sampleId) ?? null;
+    if (inPage) return inPage;
+    if (excelFiltering)
+      return allItems.find((x) => x.sampleId === sampleId) ?? null;
+    return null;
+  };
+
+  const openDetailById = (sampleId: string) => {
+    const row = findRowById(sampleId);
     setSelected(row);
     setDetailOpen(true);
   };
 
-  const onOpenCreate = () => {
-    setSelected(null);
-    setUpsertMode("create");
-    setUpsertOpen(true);
-  };
-
-  const onOpenUpdate = (row: SampleListItem) => {
+  const openUpdateById = (sampleId: string) => {
+    const row = findRowById(sampleId);
     setSelected(row);
     setUpsertMode("update");
     setUpsertOpen(true);
   };
 
+  const openDeleteById = (sampleId: string) => {
+    setDeleteTargetId(sampleId);
+    setDeleteOpen(true);
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="bg-card rounded-lg border border-border p-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center">
-            <div className="md:w-100">
-              <PopoverPrimitive.Root
-                open={receiptOpen}
-                onOpenChange={setReceiptOpen}>
-                <PopoverPrimitive.Anchor asChild>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-
-                    <Input
-                      ref={(el) => {
-                        inputRef.current = el;
-                      }}
-                      value={receiptSearch}
-                      placeholder={t("handover.storedSamples.searchPlaceholder")}
-                      className="pl-10 pr-10 bg-background"
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setPage(1);
-                        setReceiptSearch(v);
-                        setReceiptIdFilter("");
-                        if (v.trim().length > 0) {
-                          window.setTimeout(() => setReceiptOpen(true), 0);
-                        } else {
-                          setReceiptOpen(false);
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          setReceiptOpen(false);
-                          return;
-                        }
-                        if (e.key === "Enter") {
-                          const v = receiptSearch.trim();
-                          setPage(1);
-                          setReceiptIdFilter(v);
-                          setReceiptOpen(false);
-                        }
-                      }}
-                    />
-
-                    <ChevronsUpDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  </div>
-                </PopoverPrimitive.Anchor>
-
-                <PopoverPrimitive.Content
-                  align="start"
-                  sideOffset={6}
-                  className="z-50 w-[--radix-popover-anchor-width] rounded-md border border-border bg-popover p-0 shadow-md"
-                  onOpenAutoFocus={(e) => e.preventDefault()}
-                  onInteractOutside={(e) => {
-                    const node = e.target as Node;
-                    if (inputRef.current && inputRef.current.contains(node)) {
-                      e.preventDefault();
-                    }
-                  }}>
-                  <Command shouldFilter={false}>
-                    <CommandList>
-                      <CommandEmpty>
-                        <div className="px-3 py-4 text-sm text-muted-foreground">
-                          {receiptsQ.isFetching
-                            ? t("common.loading")
-                            : t("common.noData")}
-                        </div>
-                      </CommandEmpty>
-
-                      <CommandGroup>
-                        {receiptOptions.map((r: ReceiptListItem) => {
-                          const isSelected = receiptIdFilter === r.receiptId;
-                          return (
-                            <CommandItem
-                              key={r.receiptId}
-                              value={r.receiptId}
-                              onSelect={() => {
-                                setPage(1);
-                                setReceiptSearch(r.receiptId);
-                                setReceiptIdFilter(r.receiptId);
-                                setReceiptOpen(false);
-                              }}>
-                              <span className="mr-2 inline-flex h-4 w-4 items-center justify-center">
-                                {isSelected ? (
-                                  <Check className="h-4 w-4" />
-                                ) : null}
-                              </span>
-                              <span className="truncate">{r.receiptId}</span>
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverPrimitive.Content>
-              </PopoverPrimitive.Root>
-            </div>
-
-            <div className="md:w-60">
-              <Select
-                value={status}
-                onValueChange={(v) => {
-                  setPage(1);
-                  setStatus(v as StatusFilterValue);
-                }}>
-                <SelectTrigger className="bg-background">
-                  <SelectValue
-                    placeholder={t("common.status")}
-                  />
-                </SelectTrigger>
-
-                <SelectContent>
-                  <SelectItem value={STATUS_ALL}>{t("common.all")}</SelectItem>
-                  <SelectItem value="Received">
-                    {t("lab.samples.status.Received")}
-                  </SelectItem>
-                  <SelectItem value="Analyzing">
-                    {t("lab.samples.status.Analyzing")}
-                  </SelectItem>
-                  <SelectItem value="Stored">
-                    {t("lab.samples.status.Stored")}
-                  </SelectItem>
-                  <SelectItem value="Disposed">
-                    {t("lab.samples.status.Disposed")}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="relative w-full md:flex-1 md:max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={t("handover.storedSamples.searchPlaceholder")}
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-10 bg-background"
+            />
           </div>
 
-          <div className="flex md:justify-end">
-            <Button onClick={onOpenCreate} className="w-full md:w-auto">
-              <Plus className="h-4 w-4 mr-2" />
+          <div className="flex w-full md:w-auto md:justify-end">
+            <Button
+              variant="default"
+              className="flex w-full items-center gap-2 md:w-auto"
+              onClick={() => {
+                setSelected(null);
+                setUpsertMode("create");
+                setUpsertOpen(true);
+              }}>
+              <Plus className="h-4 w-4" />
               {t("common.create")}
             </Button>
           </div>
         </div>
       </div>
 
-      {listQ.isLoading ? (
-        <Skeleton />
-      ) : listQ.isError ? (
+      {isLoading ? <Skeleton /> : null}
+
+      {isError ? (
         <div className="bg-card border border-border rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
           <div>
@@ -379,95 +297,34 @@ export function StoredSamples() {
             </div>
           </div>
         </div>
-      ) : (
-        <div className="bg-card border border-border rounded-lg overflow-x-auto">
-          <table className="w-full min-w-4xl">
-            <thead className="bg-muted/50 border-b border-border">
-              <tr>
-                <th className="px-3 py-4 text-left text-xs font-medium text-muted-foreground uppercase">
-                  {t("lab.samples.sampleId")}
-                </th>
-                <th className="px-3 py-4 text-left text-xs font-medium text-muted-foreground uppercase">
-                  {t("lab.samples.receiptId")}
-                </th>
-                <th className="px-3 py-4 text-left text-xs font-medium text-muted-foreground uppercase">
-                  {t("lab.samples.sampleTypeName")}
-                </th>
-                <th className="px-3 py-4 text-left text-xs font-medium text-muted-foreground uppercase">
-                  {t("lab.samples.sampleVolume")}
-                </th>
-                <th className="px-3 py-4 text-left text-xs font-medium text-muted-foreground uppercase">
-                  {t("lab.samples.sampleStatus")}
-                </th>
-                <th className="px-3 py-4 text-center text-xs font-medium text-muted-foreground uppercase">
-                  {t("common.actions")}
-                </th>
-              </tr>
-            </thead>
+      ) : null}
 
-            <tbody className="divide-y divide-border">
-              {items.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    {t("common.noData")}
-                  </td>
-                </tr>
-              ) : (
-                items.map((row: SampleListItem) => (
-                  <tr
-                    key={row.sampleId}
-                    className="hover:bg-accent/30 transition-colors">
-                    <td className="px-3 py-4 font-semibold text-sm text-foreground">
-                      <button
-                        className="text-primary hover:underline"
-                        onClick={() => onOpenDetail(row)}>
-                        {row.sampleId}
-                      </button>
-                    </td>
+      {!isLoading && !isError ? (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <SamplesTable
+            items={pageItems}
+            selectedRowKey={selectedRowKey}
+            onSelectRow={(rowKey, sampleId) => {
+              setSelectedRowKey(rowKey);
+              openDetailById(sampleId);
+            }}
+            onView={(id) => openDetailById(id)}
+            onEdit={(id) => openUpdateById(id)}
+            onDelete={(id) => openDeleteById(id)}
+            excelFilters={excelFilters}
+            onExcelFiltersChange={onExcelFiltersChange}
+          />
 
-                    <td className="px-3 py-4 text-sm text-foreground">
-                      {toDash(row.receiptId)}
-                    </td>
-                    <td className="px-3 py-4 text-sm text-foreground">
-                      {toDash(row.sampleTypeName)}
-                    </td>
-                    <td className="px-3 py-4 text-sm text-muted-foreground">
-                      {toDash(row.sampleVolume)}
-                    </td>
-                    <td className="px-3 py-4">
-                      <StatusBadge status={row.sampleStatus ?? null} />
-                    </td>
-
-                    <td className="px-3 py-4">
-                      <RowActionIcons
-                        onView={() => onOpenDetail(row)}
-                        onEdit={() => onOpenUpdate(row)}
-                        showDelete={false}
-                      />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <Pagination
+            currentPage={pagination.currentPage}
+            totalPages={totalPages}
+            itemsPerPage={pagination.itemsPerPage}
+            totalItems={totalItems}
+            onPageChange={pagination.handlePageChange}
+            onItemsPerPageChange={pagination.handleItemsPerPageChange}
+          />
         </div>
-      )}
-
-      <div className="mt-2">
-        <Pagination
-          totalItems={totalItems}
-          totalPages={totalPages}
-          itemsPerPage={itemsPerPage}
-          currentPage={page}
-          onPageChange={setPage}
-          onItemsPerPageChange={(n) => {
-            setPage(1);
-            setItemsPerPage(n);
-          }}
-        />
-      </div>
+      ) : null}
 
       <SampleDetailModal
         open={detailOpen}
@@ -480,6 +337,13 @@ export function StoredSamples() {
         mode={upsertMode}
         sampleId={upsertMode === "update" ? selected?.sampleId ?? null : null}
         onClose={() => setUpsertOpen(false)}
+      />
+
+      <SampleDeleteModal
+        open={deleteOpen}
+        sampleId={deleteTargetId}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => {}}
       />
     </div>
   );

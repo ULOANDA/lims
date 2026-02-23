@@ -804,10 +804,10 @@ export default {
       samplingInfo: "Field Sampling Info",
       physicalState: "Physical State",
       status: {
-        Received: "Pending",
-        Analyzing: "Analyzing",
-        Stored: "Stored",
-        Disposed: "Disposed",
+        received: "Pending",
+        analyzing: "Analyzing",
+        stored: "Stored",
+        disposed: "Disposed",
       },
       placeholders: {
         receiptId: "Enter receipt ID...",
