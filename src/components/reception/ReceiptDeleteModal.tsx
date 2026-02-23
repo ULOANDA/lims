@@ -38,7 +38,7 @@ export function ReceiptDeleteModal({ open, receiptId, onClose, onDeleted }: Prop
       const res = await receiptsDelete({ body: toDeleteBody(safeId) });
       if (!res.success) throw new Error(res.error?.message ?? "Request failed");
 
-      toast.success(t("common.toast.deleteSuccess"));
+      toast.success(t("common.toast.deleted"));
       onDeleted?.();
       onClose();
     } catch (e: unknown) {

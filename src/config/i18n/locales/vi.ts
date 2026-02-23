@@ -117,6 +117,7 @@ export default {
       deleted: "Xóa thành công",
       failed: "Thao tác thất bại",
       tryAgain: "Vui lòng thử lại",
+      requestFailed: "Yêu cầu thất bại",
     },
     placeholder: {
       enterValue: "Nhập giá trị...",
@@ -736,6 +737,8 @@ export default {
       senderInfo: "Thông tin người gửi",
       conditionCheck: "Tình trạng mẫu khi nhận",
       reportConfig: "Cấu hình trả báo cáo",
+      receiptIdPlaceholder: "Nhập ID Phiếu",
+      receiptCodePlaceholder: "Nhập mã hồ sơ",
       status: {
         Pending: "Mới tiếp nhận",
         Processing: "Đang xử lý",
