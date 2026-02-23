@@ -114,8 +114,48 @@ export function SampleReception() {
   }, [totalPages]);
 
   useEffect(() => {
-    if (pagination.currentPage > totalPages) {
-      pagination.handlePageChange(totalPages);
+    let cancelled = false;
+
+    async function run() {
+      setLoadingList(true);
+      setErrorList(null);
+
+      const res = await receiptsGetList({
+        query: {
+          page,
+          itemsPerPage,
+        },
+      });
+
+      if (cancelled) return;
+
+      if (!res.success) {
+        setList([]);
+        setMeta(null);
+        setErrorList(res.error?.message ?? t("common.toast.requestFailed"));
+        setLoadingList(false);
+        return;
+      }
+
+      const data = res.data ?? [];
+      setList(data);
+
+      const m = res.meta ?? null;
+
+      const totalPages =
+        typeof m?.totalPages === "number" && Number.isFinite(m.totalPages)
+          ? m.totalPages
+          : 1;
+      
+      const totalItems =
+        typeof (m as { totalItems?: unknown })?.totalItems === "number" &&
+        Number.isFinite((m as { totalItems: number }).totalItems)
+          ? (m as { totalItems: number }).totalItems
+          : data.length;
+      
+      setMeta({ totalPages, total: totalItems });
+      
+      setLoadingList(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPages]);
