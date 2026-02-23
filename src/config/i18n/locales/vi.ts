@@ -18,6 +18,9 @@ export default {
     storedSamplesTitle: "Mẫu lưu",
     storedSamplesDescription: "Kho mẫu lưu",
 
+    analysesTitle: "Phép thử",
+    analysesDescription: "Quản lý phép thử",
+
     libraryTitle: "Thư viện",
     libraryDescription: "Danh mục hệ thống",
 
@@ -129,6 +132,8 @@ export default {
     deletedAt: "Ngày xóa",
     status: "Trạng thái",
     note: "Ghi chú",
+    confirmDelete:
+    "Bạn có chắc chắn muốn xóa? Hành động này không thể hoàn tác.",
     pagination: {
       itemsPerPagePrefix: "Hiển thị",
       itemsPerPageSuffix: "/ trang",
@@ -822,6 +827,15 @@ export default {
         Testing: "Đang thực hiện",
         Review: "Đang xem xét",
         Approved: "Đã phê duyệt",
+        DataEntered: "Đã nhập dữ liệu",
+        TechReview: "KTV duyệt",
+        ReTest: "Thử nghiệm lại",
+        Cancelled: "Đã hủy",
+      },
+      resultStatus: {
+        Pass: "Đạt",
+        Fail: "Không đạt",
+        NotEvaluated: "Chưa đánh giá",
       },
     },
     equipment: {
