@@ -350,7 +350,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
       const detail = await clientsGetDetail({ params: { clientId } });
       applyClientDetailToForms(detail);
       setClientSuggestOpen(false);
-      toast.success(t("common.loadedSuccessfully"));
+      toast.success(t("common.success"));
     } catch (e) {
       toast.error(t("common.requestFailed"), {
         description: getErrorMessage(e, t("common.tryAgain")),
@@ -441,7 +441,7 @@ export function CreateReceiptModal({ onClose, onCreated }: Props) {
         return { ...prev, samples: next };
       });
 
-      toast.success(t("common.loadedSuccessfully"));
+      toast.success(t("common.success"));
     } catch (e) {
       toast.error(t("common.requestFailed"), {
         description: getErrorMessage(e, t("common.tryAgain")),

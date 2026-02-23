@@ -1,47 +1,463 @@
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FileText } from "lucide-react";
+import { FileText, Filter, X, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
-import type { Protocol } from "@/api/library";
+import {
+  useProtocolsFilter,
+  type Protocol,
+  type ProtocolsFilterFrom,
+  type ProtocolsFilterOtherFilter,
+} from "@/api/library";
+
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
+
+export type ProtocolsExcelFiltersState = {
+  protocolCode: string[];
+  protocolSource: string[];
+  accreditation: string[];
+};
+
+type FilterKey = keyof ProtocolsExcelFiltersState;
 
 type Props = {
   items: Protocol[];
   onView: (p: Protocol) => void;
+
+  excelFilters: ProtocolsExcelFiltersState;
+  onExcelFiltersChange: (next: ProtocolsExcelFiltersState) => void;
 };
+
+type OptionWithCount<T extends string> = { value: T; count: number };
+
+type ApiFilterKey = Exclude<FilterKey, "accreditation">;
+
+const FILTER_FROM_MAP: Record<ApiFilterKey, ProtocolsFilterFrom> = {
+  protocolCode: "protocolCode",
+  protocolSource: "protocolSource",
+};
+
+function buildOtherFiltersForApi(
+  filters: ProtocolsExcelFiltersState,
+  excludeKey: ApiFilterKey
+): ProtocolsFilterOtherFilter[] {
+  const out: ProtocolsFilterOtherFilter[] = [];
+
+  (Object.keys(FILTER_FROM_MAP) as ApiFilterKey[]).forEach((k) => {
+    if (k === excludeKey) return;
+    const v = filters[k];
+    if (!Array.isArray(v) || v.length === 0) return;
+
+    out.push({
+      filterFrom: FILTER_FROM_MAP[k],
+      filterValues: v,
+    });
+  });
+
+  return out;
+}
+
+type ExcelFilterPopoverProps = {
+  title: string;
+  filterKey: ApiFilterKey;
+  activeCount: number;
+  selected: string[];
+  excelFilters: ProtocolsExcelFiltersState;
+  onApply: (values: string[]) => void;
+  onClear: () => void;
+  limit?: number;
+};
+
+function ExcelFilterPopover(props: ExcelFilterPopoverProps) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const [localSelected, setLocalSelected] = useState<string[]>(props.selected);
+
+  const filterFrom = FILTER_FROM_MAP[props.filterKey];
+
+  const input = useMemo(
+    () => ({
+      body: {
+        filterFrom,
+        textFilter: debouncedSearch.trim().length ? debouncedSearch.trim() : null,
+        otherFilters: buildOtherFiltersForApi(props.excelFilters, props.filterKey),
+        limit: props.limit ?? 200,
+      },
+    }),
+    [filterFrom, debouncedSearch, props.excelFilters, props.filterKey, props.limit]
+  );
+
+  const q = useProtocolsFilter(input, { enabled: open });
+
+  const options = useMemo((): OptionWithCount<string>[] => {
+    const data = q.data ?? [];
+    return data
+      .map((x) => {
+        const raw = x?.filterValue;
+        const value =
+          typeof raw === "string" ? raw : raw == null ? "" : String(raw);
+        return { value, count: x.count };
+      })
+      .filter((x) => x.value.trim().length > 0)
+      .sort((a, b) => a.value.localeCompare(b.value));
+  }, [q.data]);
+
+  const toggle = (v: string) => {
+    setLocalSelected((cur) =>
+      cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]
+    );
+  };
+
+  const apply = () => {
+    props.onApply(localSelected);
+    setOpen(false);
+  };
+
+  const clear = () => {
+    props.onClear();
+    setLocalSelected([]);
+    setSearch("");
+    setOpen(false);
+  };
+
+  const onOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) {
+      setLocalSelected(props.selected);
+      setSearch("");
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          type="button"
+          aria-label={t("common.filter")}
+          className="relative"
+        >
+          <Filter className="h-4 w-4" />
+          {props.activeCount > 0 ? (
+            <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
+          ) : null}
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent align="end" className="w-72 p-0">
+        <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+          <div className="text-sm font-medium text-foreground">
+            {props.title}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            onClick={() => setOpen(false)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="p-3 space-y-2">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("common.search")}
+            className="border border-border"
+          />
+        </div>
+
+        <div className="border-t border-border">
+          <Command shouldFilter={false}>
+            <CommandList className="max-h-64">
+              {q.isLoading ? (
+                <div className="p-3 text-sm text-muted-foreground">
+                  {t("common.loading")}
+                </div>
+              ) : q.isError ? (
+                <div className="p-3 text-sm text-muted-foreground">
+                  {t("common.toast.failed")}
+                </div>
+              ) : options.length === 0 ? (
+                <CommandEmpty>{t("common.noData")}</CommandEmpty>
+              ) : null}
+
+              {!q.isLoading && !q.isError ? (
+                <CommandGroup>
+                  {options.map((o) => {
+                    const checked = localSelected.includes(o.value);
+                    return (
+                      <CommandItem
+                      key={`${filterFrom}::${o.value}`}
+                      value={o.value}
+                      onSelect={() => toggle(o.value)}
+                      className="flex items-start justify-between gap-3"
+                    >
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span
+                          className={[
+                            "inline-flex h-4 w-4 min-w-4 flex-none shrink-0 items-center justify-center rounded-sm border border-border",
+                            checked ? "bg-primary text-primary-foreground" : "bg-background",
+                          ].join(" ")}
+                        >
+                          {checked ? <Check className="h-3 w-3" /> : null}
+                        </span>
+                    
+                        <span className="text-sm text-foreground break-words whitespace-normal">
+                          {o.value}
+                        </span>
+                      </div>
+                    
+                      <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                        {o.count}
+                      </span>
+                    </CommandItem>
+                    
+                    );
+                  })}
+                </CommandGroup>
+              ) : null}
+            </CommandList>
+          </Command>
+
+          <div className="p-3 border-t border-border flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={clear}
+              disabled={props.activeCount === 0}
+            >
+              {t("common.clear")}
+            </Button>
+            <Button type="button" onClick={apply}>
+              {t("common.apply")}
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+type AccreditationFilterPopoverProps = {
+  title: string;
+  activeCount: number;
+  selected: string[];
+  onApply: (values: string[]) => void;
+  onClear: () => void;
+};
+
+function AccreditationFilterPopover(props: AccreditationFilterPopoverProps) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [localSelected, setLocalSelected] = useState<string[]>(props.selected);
+
+  const options = useMemo(
+    () => [
+      { value: "VILAS", label: t("library.protocols.protocolAccreditation.vilas") },
+      { value: "TDC", label: t("library.protocols.protocolAccreditation.tdc") },
+      { value: "NONE", label: t("common.noData") },
+    ],
+    [t]
+  );
+
+  const toggle = (v: string) => {
+    setLocalSelected((cur) =>
+      cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]
+    );
+  };
+
+  const apply = () => {
+    props.onApply(localSelected);
+    setOpen(false);
+  };
+
+  const clear = () => {
+    props.onClear();
+    setLocalSelected([]);
+    setOpen(false);
+  };
+
+  const onOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) setLocalSelected(props.selected);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          type="button"
+          aria-label={t("common.filter")}
+          className="relative"
+        >
+          <Filter className="h-4 w-4" />
+          {props.activeCount > 0 ? (
+            <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
+          ) : null}
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent align="end" className="w-72 p-0">
+        <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+          <div className="text-sm font-medium text-foreground">
+            {props.title}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            onClick={() => setOpen(false)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="border-t border-border">
+          <Command shouldFilter={false}>
+            <CommandList className="max-h-64">
+              <CommandGroup>
+                {options.map((o) => {
+                  const checked = localSelected.includes(o.value);
+                  return (
+                    <CommandItem
+                      key={o.value}
+                      value={o.value}
+                      onSelect={() => toggle(o.value)}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={[
+                            "inline-flex h-4 w-4 items-center justify-center rounded-sm border border-border",
+                            checked
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-background",
+                          ].join(" ")}
+                        >
+                          {checked ? <Check className="h-3 w-3" /> : null}
+                        </span>
+
+                        <span className="text-sm text-foreground">
+                          {o.label}
+                        </span>
+                      </div>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+
+          <div className="p-3 border-t border-border flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={clear}
+              disabled={props.activeCount === 0}
+            >
+              {t("common.clear")}
+            </Button>
+            <Button type="button" onClick={apply}>
+              {t("common.apply")}
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function formatDdMmYyyy(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(d.getFullYear());
+  return `${dd}/${mm}/${yyyy}`;
+}
 
 export function ProtocolsTable(props: Props) {
   const { t } = useTranslation();
-  const { items, onView } = props;
+  const { items, onView, excelFilters, onExcelFiltersChange } = props;
 
-  function formatDdMmYyyy(iso: string): string {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = String(d.getFullYear());
-    return `${dd}/${mm}/${yyyy}`;
-  }
+  const setStr = (key: FilterKey, values: string[]) => {
+    onExcelFiltersChange({
+      ...excelFilters,
+      [key]: values,
+    } as ProtocolsExcelFiltersState);
+  };
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-max">
         <thead className="bg-muted/50 border-b border-border">
-          <tr className="">
+          <tr>
             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-              {t("library.protocols.protocolCode")}
+              <span className="inline-flex items-center gap-2">
+                {t("library.protocols.protocolCode")}
+                <ExcelFilterPopover
+                  title={t("library.protocols.protocolCode")}
+                  filterKey="protocolCode"
+                  activeCount={excelFilters.protocolCode.length}
+                  selected={excelFilters.protocolCode}
+                  excelFilters={excelFilters}
+                  onApply={(v) => setStr("protocolCode", v)}
+                  onClear={() => setStr("protocolCode", [])}
+                />
+              </span>
             </th>
+
             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-              {t("library.protocols.protocolSource")}
+              <span className="inline-flex items-center gap-2">
+                {t("library.protocols.protocolSource")}
+                <ExcelFilterPopover
+                  title={t("library.protocols.protocolSource")}
+                  filterKey="protocolSource"
+                  activeCount={excelFilters.protocolSource.length}
+                  selected={excelFilters.protocolSource}
+                  excelFilters={excelFilters}
+                  onApply={(v) => setStr("protocolSource", v)}
+                  onClear={() => setStr("protocolSource", [])}
+                />
+              </span>
             </th>
+
             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-              {t("library.protocols.protocolAccreditation.title")}
+              <span className="inline-flex items-center gap-2">
+                {t("library.protocols.protocolAccreditation.title")}
+                <AccreditationFilterPopover
+                  title={t("library.protocols.protocolAccreditation.title")}
+                  activeCount={excelFilters.accreditation.length}
+                  selected={excelFilters.accreditation}
+                  onApply={(v) => setStr("accreditation", v)}
+                  onClear={() => setStr("accreditation", [])}
+                />
+              </span>
             </th>
+
             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
               {t("library.protocols.protocolCreateAt")}
             </th>
+
             <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">
               {t("library.protocols.columns.actions")}
             </th>
@@ -54,9 +470,11 @@ export function ProtocolsTable(props: Props) {
               <td className="px-4 py-3 text-sm text-foreground font-medium">
                 {p.protocolCode}
               </td>
+
               <td className="px-4 py-3 text-sm text-foreground">
                 {p.protocolSource}
               </td>
+
               <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-2">
                   {p.protocolAccreditation?.VILAS ? (
@@ -79,6 +497,7 @@ export function ProtocolsTable(props: Props) {
                   ) : null}
                 </div>
               </td>
+
               <td className="px-4 py-3 text-sm text-muted-foreground">
                 {formatDdMmYyyy(p.createdAt)}
               </td>
@@ -91,7 +510,8 @@ export function ProtocolsTable(props: Props) {
                     className="h-8 w-8 p-0"
                     onClick={() => onView(p)}
                     type="button"
-                    title={t("common.view")}>
+                    title={t("common.view")}
+                  >
                     <FileText className="h-4 w-4" />
                   </Button>
                 </div>

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
 
 import { Pagination } from "@/components/ui/pagination";
-import { useMatricesList, type Matrix } from "@/api/library";
+import { useMatricesAll, type Matrix } from "@/api/library";
 
 import { LibraryHeader } from "../LibraryHeader";
 import { useServerPagination } from "../hooks/useServerPagination";
@@ -24,6 +24,18 @@ type CreateMatrixForm = {
   feeAfterTax: string;
 };
 
+export type ExcelFiltersState = {
+  matrixId: string[];
+  parameterId: string[];
+  parameterName: string[];
+  protocolId: string[];
+  protocolCode: string[];
+  sampleTypeId: string[];
+  sampleTypeName: string[];
+  feeBeforeTax: number[];
+  feeAfterTax: number[];
+};
+
 function MatricesSkeleton() {
   return (
     <div className="bg-background border border-border rounded-lg p-4">
@@ -36,13 +48,74 @@ function MatricesSkeleton() {
   );
 }
 
+function toNumberSafe(v: unknown): number | null {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isNaN(n) ? null : n;
+}
+
+function getParameterLabel(m: Matrix): string {
+  return m.parameterName && m.parameterName.trim() ? m.parameterName.trim() : m.parameterId;
+}
+
+function getProtocolLabel(m: Matrix): string {
+  return m.protocolCode && m.protocolCode.trim() ? m.protocolCode.trim() : m.protocolId;
+}
+
+function getSampleTypeLabel(m: Matrix): string {
+  return m.sampleTypeName && m.sampleTypeName.trim() ? m.sampleTypeName.trim() : m.sampleTypeId;
+}
+
+function applyLocalFilters(items: Matrix[], f: ExcelFiltersState): Matrix[] {
+  const matchStr = (value: string, selected: string[]) =>
+    selected.length ? selected.includes(value) : true;
+
+  const matchNum = (value: number | null, selected: number[]) =>
+    selected.length ? value !== null && selected.includes(value) : true;
+
+  return items.filter((m) => {
+    const feeBeforeTax = toNumberSafe(m.feeBeforeTax) ?? null;
+    const feeAfterTax = toNumberSafe(m.feeAfterTax) ?? null;
+
+    const parameterLabel = getParameterLabel(m);
+    const protocolLabel = getProtocolLabel(m);
+    const sampleTypeLabel = getSampleTypeLabel(m);
+
+    return (
+      matchStr(m.matrixId, f.matrixId) &&
+      matchStr(m.parameterId, f.parameterId) &&
+      matchStr(parameterLabel, f.parameterName) &&
+      matchStr(m.protocolId, f.protocolId) &&
+      matchStr(protocolLabel, f.protocolCode) &&
+      matchStr(m.sampleTypeId, f.sampleTypeId) &&
+      matchStr(sampleTypeLabel, f.sampleTypeName) &&
+      matchNum(feeBeforeTax, f.feeBeforeTax) &&
+      matchNum(feeAfterTax, f.feeAfterTax)
+    );
+  });
+}
+
+function createEmptyFilters(): ExcelFiltersState {
+  return {
+    matrixId: [],
+    parameterId: [],
+    parameterName: [],
+    protocolId: [],
+    protocolCode: [],
+    sampleTypeId: [],
+    sampleTypeName: [],
+    feeBeforeTax: [],
+    feeAfterTax: [],
+  };
+}
+
 export function MatricesView() {
   const { t } = useTranslation();
 
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
+  const [selectedMatrixId, setSelectedMatrixId] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -62,34 +135,21 @@ export function MatricesView() {
   const [serverTotalPages, setServerTotalPages] = useState<number | null>(null);
   const pagination = useServerPagination(serverTotalPages, 10);
 
-  const listInput = useMemo(
+  const allInput = useMemo(
     () => ({
       query: {
-        page: pagination.currentPage,
-        itemsPerPage: pagination.itemsPerPage,
+        page: 1,
+        itemsPerPage: 5000,
         search: debouncedSearch.trim().length ? debouncedSearch.trim() : null,
       },
       sort: { column: "createdAt", direction: "DESC" as const },
     }),
-    [pagination.currentPage, pagination.itemsPerPage, debouncedSearch]
+    [debouncedSearch]
   );
 
-  const matricesQ = useMatricesList(listInput);
+  const matricesAllQ = useMatricesAll(allInput);
 
-  const pageItems = (matricesQ.data?.data ?? []) as Matrix[];
-  const totalItems = matricesQ.data?.meta?.total ?? 0;
-  const totalPages = matricesQ.data?.meta?.totalPages ?? 1;
-
-  useEffect(() => {
-    setServerTotalPages(totalPages);
-  }, [totalPages]);
-
-  useEffect(() => {
-    if (pagination.currentPage > totalPages) {
-      pagination.handlePageChange(totalPages);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalPages]);
+  const allItems = useMemo(() => (matricesAllQ.data?.data ?? []) as Matrix[], [matricesAllQ.data]);
 
   const onSearchChange = (v: string) => {
     setSearchTerm(v);
@@ -108,8 +168,45 @@ export function MatricesView() {
     setCreateOpen(true);
   };
 
-  const isLoading = matricesQ.isLoading;
-  const isError = matricesQ.isError;
+  const [excelFilters, setExcelFilters] = useState<ExcelFiltersState>(() => createEmptyFilters());
+
+  const filteredAllItems = useMemo(
+    () => applyLocalFilters(allItems, excelFilters),
+    [allItems, excelFilters]
+  );
+
+  const totalItems = filteredAllItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pagination.itemsPerPage));
+
+  useEffect(() => {
+    setServerTotalPages(totalPages);
+  }, [totalPages]);
+
+  useEffect(() => {
+    if (pagination.currentPage > totalPages) {
+      pagination.handlePageChange(totalPages);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPages]);
+
+  const pageItems = useMemo(() => {
+    const start = (pagination.currentPage - 1) * pagination.itemsPerPage;
+    const end = start + pagination.itemsPerPage;
+    return filteredAllItems.slice(start, end);
+  }, [filteredAllItems, pagination.currentPage, pagination.itemsPerPage]);
+
+  const clearAllExcelFilters = () => {
+    setExcelFilters(createEmptyFilters());
+    pagination.resetPage();
+  };
+
+  const isLoading = matricesAllQ.isLoading;
+  const isError = matricesAllQ.isError;
+
+  const onExcelFiltersChange = (next: ExcelFiltersState) => {
+    setExcelFilters(next);
+    pagination.resetPage();
+  };
 
   return (
     <div className="space-y-4">
@@ -130,9 +227,7 @@ export function MatricesView() {
         <div className="bg-background border border-border rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
           <div>
-            <div className="text-sm font-medium text-foreground">
-              {t("common.errorTitle")}
-            </div>
+            <div className="text-sm font-medium text-foreground">{t("common.errorTitle")}</div>
             <div className="text-sm text-muted-foreground">
               {t("library.matrices.errors.loadFailed")}
             </div>
@@ -144,42 +239,49 @@ export function MatricesView() {
         <div className="bg-background rounded-lg border border-border overflow-hidden">
           <MatricesTable
             items={pageItems}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
+            selectedRowKey={selectedRowKey}
+            onSelectRow={(rowKey, matrixId) => {
+              setSelectedRowKey(rowKey);
+              setSelectedMatrixId(matrixId);
+            }}
             onOpenDetail={(id) => {
-              setSelectedId(id);
+              setSelectedMatrixId(id);
               setDetailOpen(true);
             }}
             onOpenEdit={(id) => {
-              setSelectedId(id);
+              setSelectedMatrixId(id);
               setEditOpen(true);
             }}
             onOpenDelete={(id) => {
-              setSelectedId(id);
+              setSelectedMatrixId(id);
               setDetailOpen(false);
               setEditOpen(false);
               setDeleteOpen(true);
             }}
+            excelFilters={excelFilters}
+            onExcelFiltersChange={onExcelFiltersChange}
+            onClearAllExcelFilters={clearAllExcelFilters}
           />
 
           <MatricesDetailModal
             open={detailOpen}
-            matrixId={detailOpen ? selectedId : null}
+            matrixId={detailOpen ? selectedMatrixId : null}
             onClose={() => setDetailOpen(false)}
           />
 
           <MatricesEditModal
             open={editOpen}
-            matrixId={editOpen ? selectedId : null}
+            matrixId={editOpen ? selectedMatrixId : null}
             onClose={() => setEditOpen(false)}
           />
 
           <MatricesDeleteConfirm
             open={deleteOpen}
-            matrixId={selectedId}
+            matrixId={selectedMatrixId}
             onClose={() => setDeleteOpen(false)}
             onDeleted={(id) => {
-              setSelectedId((cur) => (cur === id ? null : cur));
+              setSelectedMatrixId((cur) => (cur === id ? null : cur));
+              setSelectedRowKey(null);
             }}
           />
 

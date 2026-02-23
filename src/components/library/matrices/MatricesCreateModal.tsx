@@ -4,7 +4,21 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { useCreateMatrix, type MatrixCreateBody } from "@/api/library";
+import {
+  useCreateMatrix,
+  useParametersList,
+  useProtocolsList,
+  useSampleTypesList,
+  type MatrixCreateBody,
+  type Parameter,
+  type Protocol,
+  type SampleType,
+} from "@/api/library";
+
+import {
+  SearchableSelect,
+  type Option,
+} from "@/components/common/SearchableSelect";
 
 type Props = {
   open: boolean;
@@ -77,16 +91,33 @@ function parseOptionalInt(raw: string): number | null {
   return Math.trunc(n);
 }
 
+function useDebouncedValue(value: string, ms: number) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = window.setTimeout(() => setV(value), ms);
+    return () => window.clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
 function SectionTitle(props: { children: React.ReactNode }) {
-  return (
-    <div className="text-sm font-semibold text-foreground">
-      {props.children}
-    </div>
-  );
+  return <div className="text-sm font-semibold text-foreground">{props.children}</div>;
 }
 
 function FieldLabel(props: { children: React.ReactNode }) {
   return <div className="text-xs text-muted-foreground">{props.children}</div>;
+}
+
+function toParameterOption(p: Parameter): Option {
+  return { value: p.parameterId, label: p.parameterName, keywords: p.parameterName };
+}
+
+function toProtocolOption(p: Protocol): Option {
+  return { value: p.protocolId, label: p.protocolCode, keywords: `${p.protocolSource}` };
+}
+
+function toSampleTypeOption(s: SampleType): Option {
+  return { value: s.sampleTypeId, label: s.sampleTypeName, keywords: s.sampleTypeName };
 }
 
 export function MatricesCreateModal(props: Props) {
@@ -96,14 +127,60 @@ export function MatricesCreateModal(props: Props) {
   const createM = useCreateMatrix();
   const [form, setForm] = useState<FormState>(() => initForm());
 
+  const [parameterSearch, setParameterSearch] = useState("");
+  const [protocolSearch, setProtocolSearch] = useState("");
+  const [sampleTypeSearch, setSampleTypeSearch] = useState("");
+
+  const debouncedParameterSearch = useDebouncedValue(parameterSearch, 250);
+  const debouncedProtocolSearch = useDebouncedValue(protocolSearch, 250);
+  const debouncedSampleTypeSearch = useDebouncedValue(sampleTypeSearch, 250);
+
+  const parametersQ = useParametersList({
+    query: {
+      page: 1,
+      itemsPerPage: 50,
+      search: debouncedParameterSearch.trim().length ? debouncedParameterSearch.trim() : null,
+    },
+  });
+
+  const protocolsQ = useProtocolsList({
+    query: {
+      page: 1,
+      itemsPerPage: 50,
+      search: debouncedProtocolSearch.trim().length ? debouncedProtocolSearch.trim() : null,
+    },
+  });
+
+  const sampleTypesQ = useSampleTypesList({
+    query: {
+      page: 1,
+      itemsPerPage: 50,
+      search: debouncedSampleTypeSearch.trim().length ? debouncedSampleTypeSearch.trim() : null,
+    },
+  });
+
+  const parameterItems = (parametersQ.data?.data ?? []) as Parameter[];
+  const protocolItems = (protocolsQ.data?.data ?? []) as Protocol[];
+  const sampleTypeItems = (sampleTypesQ.data?.data ?? []) as SampleType[];
+
+  const parameterOptions = useMemo(
+    () => parameterItems.map(toParameterOption),
+    [parameterItems]
+  );
+  const protocolOptions = useMemo(
+    () => protocolItems.map(toProtocolOption),
+    [protocolItems]
+  );
+  const sampleTypeOptions = useMemo(
+    () => sampleTypeItems.map(toSampleTypeOption),
+    [sampleTypeItems]
+  );
+
   const feeBeforeTaxNum = useMemo(
     () => parseFiniteNumber(form.feeBeforeTax),
     [form.feeBeforeTax]
   );
-  const taxRateNum = useMemo(
-    () => parseFiniteNumber(form.taxRate),
-    [form.taxRate]
-  );
+  const taxRateNum = useMemo(() => parseFiniteNumber(form.taxRate), [form.taxRate]);
 
   const canAutoCalcFeeAfterTax = useMemo(() => {
     if (feeBeforeTaxNum === null || feeBeforeTaxNum < 0) return false;
@@ -134,23 +211,71 @@ export function MatricesCreateModal(props: Props) {
     const hasTaxRate = form.taxRate.trim().length > 0;
     if (hasTaxRate && (taxRateNum === null || taxRateNum < 0)) return false;
 
-    if (canAutoCalcFeeAfterTax) {
-      const feeAfterTax = parseFiniteNumber(form.feeAfterTax);
-      if (feeAfterTax === null || feeAfterTax < 0) return false;
-    } else {
-      const feeAfterTax = parseFiniteNumber(form.feeAfterTax);
-      if (feeAfterTax === null || feeAfterTax < 0) return false;
-    }
+    const feeAfterTax = parseFiniteNumber(form.feeAfterTax);
+    if (feeAfterTax === null || feeAfterTax < 0) return false;
 
     const turnaroundTime = parseOptionalInt(form.turnaroundTime);
     if (turnaroundTime !== null && turnaroundTime < 0) return false;
 
     return true;
-  }, [form, feeBeforeTaxNum, taxRateNum, canAutoCalcFeeAfterTax]);
+  }, [form, feeBeforeTaxNum, taxRateNum]);
 
   const resetAndClose = () => {
     setForm(initForm());
+    setParameterSearch("");
+    setProtocolSearch("");
+    setSampleTypeSearch("");
     onClose();
+  };
+
+  const onPickParameter = (id: string | null) => {
+    if (!id) {
+      setForm((s) => ({ ...s, parameterId: "", parameterName: "" }));
+      return;
+    }
+    const found = parameterItems.find((x) => x.parameterId === id) ?? null;
+    setForm((s) => ({
+      ...s,
+      parameterId: id,
+      parameterName: found?.parameterName ?? "",
+    }));
+  };
+
+  const onPickSampleType = (id: string | null) => {
+    if (!id) {
+      setForm((s) => ({ ...s, sampleTypeId: "", sampleTypeName: "" }));
+      return;
+    }
+    const found = sampleTypeItems.find((x) => x.sampleTypeId === id) ?? null;
+    setForm((s) => ({
+      ...s,
+      sampleTypeId: id,
+      sampleTypeName: found?.sampleTypeName ?? "",
+    }));
+  };
+
+  const onPickProtocol = (id: string | null) => {
+    if (!id) {
+      setForm((s) => ({
+        ...s,
+        protocolId: "",
+        protocolCode: "",
+        protocolSource: "",
+        accreditationTDC: false,
+        accreditationVILAS: false,
+      }));
+      return;
+    }
+    const found = protocolItems.find((x) => x.protocolId === id) ?? null;
+
+    setForm((s) => ({
+      ...s,
+      protocolId: id,
+      protocolCode: found?.protocolCode ?? "",
+      protocolSource: found?.protocolSource ?? "",
+      accreditationTDC: Boolean(found?.protocolAccreditation?.TDC),
+      accreditationVILAS: Boolean(found?.protocolAccreditation?.VILAS),
+    }));
   };
 
   const submit = async () => {
@@ -159,9 +284,7 @@ export function MatricesCreateModal(props: Props) {
     const feeBeforeTax = parseFiniteNumber(form.feeBeforeTax);
     if (feeBeforeTax === null) return;
 
-    const taxRate = form.taxRate.trim().length
-      ? parseFiniteNumber(form.taxRate)
-      : null;
+    const taxRate = form.taxRate.trim().length ? parseFiniteNumber(form.taxRate) : null;
 
     const feeAfterTaxComputed =
       canAutoCalcFeeAfterTax && taxRateNum !== null && feeBeforeTaxNum !== null
@@ -169,14 +292,11 @@ export function MatricesCreateModal(props: Props) {
         : null;
 
     const feeAfterTax =
-      feeAfterTaxComputed !== null
-        ? feeAfterTaxComputed
-        : parseFiniteNumber(form.feeAfterTax);
+      feeAfterTaxComputed !== null ? feeAfterTaxComputed : parseFiniteNumber(form.feeAfterTax);
 
     if (feeAfterTax === null) return;
 
     const turnaroundTime = parseOptionalInt(form.turnaroundTime);
-
     const hasAccreditation = form.accreditationVILAS || form.accreditationTDC;
 
     const body: MatrixCreateBody = {
@@ -184,22 +304,13 @@ export function MatricesCreateModal(props: Props) {
       protocolId: form.protocolId.trim(),
       sampleTypeId: form.sampleTypeId.trim(),
 
-      protocolCode: form.protocolCode.trim().length
-        ? form.protocolCode.trim()
-        : null,
-      protocolSource: form.protocolSource.trim().length
-        ? form.protocolSource.trim()
-        : null,
+      parameterName: form.parameterName.trim().length ? form.parameterName.trim() : null,
+      sampleTypeName: form.sampleTypeName.trim().length ? form.sampleTypeName.trim() : null,
+      protocolCode: form.protocolCode.trim().length ? form.protocolCode.trim() : null,
+      protocolSource: form.protocolSource.trim().length ? form.protocolSource.trim() : null,
       protocolAccreditation: hasAccreditation
         ? { VILAS: form.accreditationVILAS, TDC: form.accreditationTDC }
         : undefined,
-
-      parameterName: form.parameterName.trim().length
-        ? form.parameterName.trim()
-        : null,
-      sampleTypeName: form.sampleTypeName.trim().length
-        ? form.sampleTypeName.trim()
-        : null,
 
       feeBeforeTax,
       taxRate: taxRate ?? undefined,
@@ -207,10 +318,7 @@ export function MatricesCreateModal(props: Props) {
 
       LOD: form.LOD.trim().length ? form.LOD.trim() : null,
       LOQ: form.LOQ.trim().length ? form.LOQ.trim() : null,
-      thresholdLimit: form.thresholdLimit.trim().length
-        ? form.thresholdLimit.trim()
-        : null,
-
+      thresholdLimit: form.thresholdLimit.trim().length ? form.thresholdLimit.trim() : null,
       turnaroundTime,
 
       technicianGroupId: form.technicianGroupId.trim().length
@@ -222,6 +330,8 @@ export function MatricesCreateModal(props: Props) {
     resetAndClose();
   };
 
+  const resetKey = open ? "open" : "closed";
+
   if (!open) return null;
 
   return (
@@ -231,11 +341,7 @@ export function MatricesCreateModal(props: Props) {
           <div className="text-base font-semibold text-foreground">
             {t("library.matrices.create.title")}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={resetAndClose}
-            type="button">
+          <Button variant="ghost" size="sm" onClick={resetAndClose} type="button">
             {t("common.close")}
           </Button>
         </div>
@@ -243,122 +349,106 @@ export function MatricesCreateModal(props: Props) {
         <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-6 min-w-0">
             <div className="space-y-3">
-              <SectionTitle>
-                {t("library.matrices.create.sampleParameter")}
-              </SectionTitle>
+              <SectionTitle>{t("library.matrices.create.sampleParameter")}</SectionTitle>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.parameterId")}
-                  </FieldLabel>
-                  <Input
-                    value={form.parameterId}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, parameterId: e.target.value }))
-                    }
+                  <FieldLabel>{t("library.matrices.parameterId")}</FieldLabel>
+                  <SearchableSelect
+                    value={form.parameterId || null}
+                    options={parameterOptions}
+                    placeholder={t("library.parameters.searchPlaceholder")}
+                    searchPlaceholder={t("library.parameters.searchPlaceholder")}
+                    loading={parametersQ.isLoading}
+                    error={parametersQ.isError}
+                    disabled={createM.isPending}
+                    onChange={onPickParameter}
+                    resetKey={resetKey}
+                    filterMode="server"
+                    searchValue={parameterSearch}
+                    onSearchChange={setParameterSearch}
                   />
                 </div>
 
                 <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.parameterName")}
-                  </FieldLabel>
-                  <Input
-                    value={form.parameterName}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, parameterName: e.target.value }))
-                    }
+                  <FieldLabel>{t("library.matrices.parameterName")}</FieldLabel>
+                  <Input value={form.parameterName} disabled />
+                </div>
+
+                <div className="space-y-1 min-w-0">
+                  <FieldLabel>{t("library.matrices.sampleTypeId")}</FieldLabel>
+                  <SearchableSelect
+                    value={form.sampleTypeId || null}
+                    options={sampleTypeOptions}
+                    placeholder={t("library.sampleTypes.searchPlaceholder")}
+                    searchPlaceholder={t("library.sampleTypes.searchPlaceholder")}
+                    loading={sampleTypesQ.isLoading}
+                    error={sampleTypesQ.isError}
+                    disabled={createM.isPending}
+                    onChange={onPickSampleType}
+                    resetKey={resetKey}
+                    filterMode="server"
+                    searchValue={sampleTypeSearch}
+                    onSearchChange={setSampleTypeSearch}
                   />
                 </div>
 
                 <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.sampleTypeId")}
-                  </FieldLabel>
-                  <Input
-                    value={form.sampleTypeId}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, sampleTypeId: e.target.value }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.sampleTypeName")}
-                  </FieldLabel>
-                  <Input
-                    value={form.sampleTypeName}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, sampleTypeName: e.target.value }))
-                    }
-                  />
+                  <FieldLabel>{t("library.matrices.sampleTypeName")}</FieldLabel>
+                  <Input value={form.sampleTypeName} disabled />
                 </div>
               </div>
             </div>
 
             <div className="space-y-3">
-              <SectionTitle>
-                {t("library.matrices.create.protocol")}
-              </SectionTitle>
+              <SectionTitle>{t("library.matrices.create.protocol")}</SectionTitle>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.protocolId")}
-                  </FieldLabel>
-                  <Input
-                    value={form.protocolId}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, protocolId: e.target.value }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.protocolCode")}
-                  </FieldLabel>
-                  <Input
-                    value={form.protocolCode}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, protocolCode: e.target.value }))
-                    }
-                  />
-                </div>
-
                 <div className="space-y-1 min-w-0 md:col-span-2">
-                  <FieldLabel>
-                    {t("library.matrices.protocolSource")}
-                  </FieldLabel>
-                  <Input
-                    value={form.protocolSource}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, protocolSource: e.target.value }))
-                    }
+                  <FieldLabel>{t("library.matrices.protocolId")}</FieldLabel>
+                  <SearchableSelect
+                    value={form.protocolId || null}
+                    options={protocolOptions}
+                    placeholder={t("library.protocols.searchPlaceholder")}
+                    searchPlaceholder={t("library.protocols.searchPlaceholder")}
+                    loading={protocolsQ.isLoading}
+                    error={protocolsQ.isError}
+                    disabled={createM.isPending}
+                    onChange={onPickProtocol}
+                    resetKey={resetKey}
+                    filterMode="server"
+                    searchValue={protocolSearch}
+                    onSearchChange={setProtocolSearch}
                   />
+                </div>
+
+                <div className="space-y-1 min-w-0">
+                  <FieldLabel>{t("library.matrices.protocolCode")}</FieldLabel>
+                  <Input value={form.protocolCode} disabled />
+                </div>
+
+                <div className="space-y-1 min-w-0">
+                  <FieldLabel>{t("library.matrices.protocolSource")}</FieldLabel>
+                  <Input value={form.protocolSource} disabled />
                 </div>
 
                 <div className="space-y-2 min-w-0 md:col-span-2">
-                  <FieldLabel>
-                    {t("library.matrices.protocolAccreditation")}
-                  </FieldLabel>
+                  <FieldLabel>{t("library.matrices.protocolAccreditation")}</FieldLabel>
 
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       type="button"
                       className="w-full whitespace-normal"
-                      variant={
-                        form.accreditationVILAS ? "secondary" : "outline"
-                      }
+                      variant={form.accreditationVILAS ? "secondary" : "outline"}
                       aria-pressed={form.accreditationVILAS}
                       onClick={() =>
                         setForm((s) => ({
                           ...s,
                           accreditationVILAS: !s.accreditationVILAS,
                         }))
-                      }>
+                      }
+                      disabled={createM.isPending}
+                    >
                       {t("library.protocols.protocolAccreditation.vilas")}
                     </Button>
 
@@ -372,7 +462,9 @@ export function MatricesCreateModal(props: Props) {
                           ...s,
                           accreditationTDC: !s.accreditationTDC,
                         }))
-                      }>
+                      }
+                      disabled={createM.isPending}
+                    >
                       {t("library.protocols.protocolAccreditation.tdc")}
                     </Button>
                   </div>
@@ -383,45 +475,37 @@ export function MatricesCreateModal(props: Props) {
 
           <div className="space-y-6 min-w-0">
             <div className="space-y-3">
-              <SectionTitle>
-                {t("library.matrices.create.pricing")}
-              </SectionTitle>
+              <SectionTitle>{t("library.matrices.create.pricing")}</SectionTitle>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.feeBeforeTax")}
-                  </FieldLabel>
+                  <FieldLabel>{t("library.matrices.feeBeforeTax")}</FieldLabel>
                   <Input
                     inputMode="numeric"
                     value={form.feeBeforeTax}
                     onChange={(e) =>
                       setForm((s) => ({ ...s, feeBeforeTax: e.target.value }))
                     }
+                    disabled={createM.isPending}
                   />
                 </div>
 
                 <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.taxRate")}
-                  </FieldLabel>
+                  <FieldLabel>{t("library.matrices.taxRate")}</FieldLabel>
                   <Input
                     inputMode="numeric"
                     value={form.taxRate}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, taxRate: e.target.value }))
-                    }
+                    onChange={(e) => setForm((s) => ({ ...s, taxRate: e.target.value }))}
+                    disabled={createM.isPending}
                   />
                 </div>
 
                 <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.feeAfterTax")}
-                  </FieldLabel>
+                  <FieldLabel>{t("library.matrices.feeAfterTax")}</FieldLabel>
                   <Input
                     inputMode="numeric"
                     value={form.feeAfterTax}
-                    disabled={canAutoCalcFeeAfterTax}
+                    disabled={createM.isPending || canAutoCalcFeeAfterTax}
                     onChange={(e) =>
                       setForm((s) => ({ ...s, feeAfterTax: e.target.value }))
                     }
@@ -431,18 +515,15 @@ export function MatricesCreateModal(props: Props) {
             </div>
 
             <div className="space-y-3">
-              <SectionTitle>
-                {t("library.matrices.create.limits")}
-              </SectionTitle>
+              <SectionTitle>{t("library.matrices.create.limits")}</SectionTitle>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1 min-w-0">
                   <FieldLabel>{t("library.matrices.LOD")}</FieldLabel>
                   <Input
                     value={form.LOD}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, LOD: e.target.value }))
-                    }
+                    onChange={(e) => setForm((s) => ({ ...s, LOD: e.target.value }))}
+                    disabled={createM.isPending}
                   />
                 </div>
 
@@ -450,49 +531,42 @@ export function MatricesCreateModal(props: Props) {
                   <FieldLabel>{t("library.matrices.LOQ")}</FieldLabel>
                   <Input
                     value={form.LOQ}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, LOQ: e.target.value }))
-                    }
+                    onChange={(e) => setForm((s) => ({ ...s, LOQ: e.target.value }))}
+                    disabled={createM.isPending}
                   />
                 </div>
 
                 <div className="space-y-1 min-w-0 md:col-span-2">
-                  <FieldLabel>
-                    {t("library.matrices.thresholdLimit")}
-                  </FieldLabel>
+                  <FieldLabel>{t("library.matrices.thresholdLimit")}</FieldLabel>
                   <Input
                     value={form.thresholdLimit}
                     onChange={(e) =>
                       setForm((s) => ({ ...s, thresholdLimit: e.target.value }))
                     }
+                    disabled={createM.isPending}
                   />
                 </div>
 
                 <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.turnaroundTime")}
-                  </FieldLabel>
+                  <FieldLabel>{t("library.matrices.turnaroundTime")}</FieldLabel>
                   <Input
                     inputMode="numeric"
                     value={form.turnaroundTime}
                     onChange={(e) =>
                       setForm((s) => ({ ...s, turnaroundTime: e.target.value }))
                     }
+                    disabled={createM.isPending}
                   />
                 </div>
 
                 <div className="space-y-1 min-w-0">
-                  <FieldLabel>
-                    {t("library.matrices.technicianGroupId")}
-                  </FieldLabel>
+                  <FieldLabel>{t("library.matrices.technicianGroupId")}</FieldLabel>
                   <Input
                     value={form.technicianGroupId}
                     onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        technicianGroupId: e.target.value,
-                      }))
+                      setForm((s) => ({ ...s, technicianGroupId: e.target.value }))
                     }
+                    disabled={createM.isPending}
                   />
                 </div>
               </div>
@@ -507,16 +581,11 @@ export function MatricesCreateModal(props: Props) {
               <Button
                 onClick={() => void submit()}
                 disabled={!canSave || createM.isPending}
-                type="button">
+                type="button"
+              >
                 {createM.isPending ? t("common.saving") : t("common.save")}
               </Button>
             </div>
-
-            {createM.isError ? (
-              <div className="mt-3 text-sm text-destructive">
-                {t("library.matrices.create.error")}
-              </div>
-            ) : null}
           </div>
         </div>
       </div>
