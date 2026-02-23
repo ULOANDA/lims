@@ -1215,6 +1215,7 @@ export default {
       table: {
         identity: "Identity",
         code: "Emp Code",
+        email: "Email",
         contact: "Contact",
         position: "Position",
         department: "Department",
