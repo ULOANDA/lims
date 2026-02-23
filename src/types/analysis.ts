@@ -18,21 +18,20 @@ export type AnalysisStatusDb =
 export type AnalysisResultStatusDb = "Pass" | "Fail" | "NotEvaluated";
 
 export type AnalysisListItem = {
-    analysisId: string;
-    sampleId: string;
-    parameterName: string | null;
-    analysisStatus: AnalysisStatusDb;
-    analysisResultStatus: AnalysisResultStatusDb | null;
-    createdAt: string;
-  
-    matrixId?: string | null;
-    parameterId?: string | null;
-    analysisResult?: string | number | null;
-    analysisCompletedAt?: string | null;
-    technician?: unknown | null;
-    createdBy?: unknown;
-  };
-  
+  analysisId: string;
+  sampleId: string;
+  parameterName: string | null;
+  analysisStatus: AnalysisStatusDb;
+  analysisResultStatus: AnalysisResultStatusDb | null;
+  createdAt: string;
+
+  matrixId?: string | null;
+  parameterId?: string | null;
+  analysisResult?: string | number | null;
+  analysisCompletedAt?: string | null;
+  technician?: unknown | null;
+  createdBy?: unknown;
+};
 
 export type AnalysisDetail = {
   analysisId: string;
@@ -55,15 +54,22 @@ export type AnalysisDetail = {
   createdBy: IdentitySnapshot;
 };
 
-
 export type AnalysesGetListBody = {
   page?: number;
   itemsPerPage?: number;
 
+  analysisId?: string;
   sampleId?: string;
+  matrixId?: string;
+  parameterId?: string;
   parameterName?: string | null;
   analysisStatus?: AnalysisStatusDb;
   analysisResultStatus?: AnalysisResultStatusDb;
+
+  search?: string | null;
+  filters?: Record<string, unknown>;
+
+  [key: string]: unknown;
 };
 
 export type AnalysesCreateBody = {

@@ -31,7 +31,7 @@ function SampleStatusBadge({ status }: { status?: string | null }) {
   if (status === "Stored") {
     return (
       <Badge variant="success" className="text-xs">
-        {t("samples.status.stored")}
+        {t("lab.samples.status.stored")}
       </Badge>
     );
   }
@@ -39,7 +39,7 @@ function SampleStatusBadge({ status }: { status?: string | null }) {
   if (status === "Analyzing") {
     return (
       <Badge variant="warning" className="text-xs">
-        {t("samples.status.analyzing")}
+        {t("lab.samples.status.analyzing")}
       </Badge>
     );
   }
@@ -47,7 +47,7 @@ function SampleStatusBadge({ status }: { status?: string | null }) {
   if (status === "Received") {
     return (
       <Badge variant="secondary" className="text-xs">
-        {t("samples.status.received")}
+        {t("lab.samples.status.received")}
       </Badge>
     );
   }
@@ -55,7 +55,7 @@ function SampleStatusBadge({ status }: { status?: string | null }) {
   if (status === "Disposed") {
     return (
       <Badge variant="destructive" className="text-xs">
-        {t("samples.status.disposed")}
+        {t("lab.samples.status.disposed")}
       </Badge>
     );
   }
