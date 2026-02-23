@@ -88,6 +88,7 @@ export default {
     cancel: "Cancel",
     delete: "Delete",
     add: "Add",
+    all: "All",
     create: "Create",
     search: "Search...",
     filter: "Filter",
@@ -797,6 +798,18 @@ export default {
         Stored: "Stored",
         Disposed: "Disposed",
       },
+      placeholders: {
+        receiptId: "Enter receipt ID...",
+        sampleTypeId: "Enter sample type ID...",
+        sampleClientInfo: "Enter client sample info...",
+        sampleVolume: "Enter sample volume...",
+        sampleStatus: "Select status...",
+        sampleStorageLoc: "Enter storage location...",
+      },
+      upsert: {
+        createTitle: "Create sample",
+        updateTitle: "Update sample",
+      },
     },
     analyses: {
       price: "Unit Price",
@@ -1323,7 +1336,7 @@ export default {
         completed: "Completed",
         pending: "Pending",
       },
-      searchPlaceholder: "Search by sample code, name, description...",
+      searchPlaceholder: "Search by receipt code ....",
       table: {
         code: "Sample Code",
         name: "Name",
