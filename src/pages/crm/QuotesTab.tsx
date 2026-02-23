@@ -23,7 +23,7 @@ import {
 import { QuoteDetailModal } from "@/components/crm/QuoteDetailModal";
 import { QuoteUpsertModal } from "@/components/crm/QuoteUpsertModal";
 import { QuoteDeleteModal } from "@/components/crm/QuoteDeleteModal";
-import { RowActionIcons } from "@/components/crm/RowActionIcons";
+import { RowActionIcons } from "@/components/common/RowActionIcons";
 import { formatCurrency } from "@/utils/format";
 
 type Props = {
