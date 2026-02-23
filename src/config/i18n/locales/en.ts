@@ -484,22 +484,85 @@ export default {
             },
           },
           
-        quotes: {
-            unitPrice: "Unit Price",
-            tax: "Tax",
-            subTotal: "Subtotal",
-            total: "Total",
-            quoteId: "Quote ID",
-            quoteCode: "Quote Code",
-            clientId: "Client",
-            salePerson: "Sales Rep",
-            samples: "Quote Details",
-            totalFeeBeforeTax: "Amount (Pre-tax)",
-            totalTaxValue: "Tax Value",
-            discount: "Discount",
-            totalAmount: "Total Payment",
-            quoteStatus: "Quote Status",
-        },
+          quotes: {
+            columns: {
+              quoteId: "Quote ID",
+              quoteCode: "Quote Code",
+              clientId: "Client ID",
+              salePersonId: "Sales Rep (ID)",
+      
+              totalAmount: "Total Amount",
+              quoteStatus: "Quote Status",
+      
+              taxRate: "Tax Rate (%)",
+              discount: "Discount (%)",
+              totalFeeBeforeTax: "Subtotal (Pre-tax)",
+              totalFeeBeforeTaxAndDiscount: "Original Subtotal",
+              totalTaxValue: "Tax Value",
+              totalDiscountValue: "Discount Value",
+      
+              contactName: "Contact Name",
+              contactEmail: "Email",
+              contactPhone: "Phone",
+              contactPosition: "Position",
+            },
+      
+            placeholders: {
+              quoteId: "Auto-generated...",
+              quoteCode: "Enter quote code...",
+              clientId: "Enter client ID...",
+              salePersonId: "Enter sales rep ID...",
+      
+              totalAmount: "Enter total amount...",
+              quoteStatus: "Select status...",
+      
+              taxRate: "Enter tax rate...",
+              discount: "Enter discount...",
+      
+              totalFeeBeforeTax: "Enter subtotal (pre-tax)...",
+              totalFeeBeforeTaxAndDiscount: "Enter original subtotal...",
+              totalTaxValue: "Enter tax value...",
+              totalDiscountValue: "Enter discount value...",
+      
+              contactName: "Enter contact name...",
+              contactEmail: "Enter contact email...",
+              contactPhone: "Enter phone...",
+              contactPosition: "Enter position...",
+            },
+      
+            status: {
+              draft: "Draft",
+              sent: "Sent",
+              approved: "Approved",
+              expired: "Expired",
+            },
+      
+            create: { title: "Create Quote" },
+            update: { title: "Update Quote" },
+      
+            form: {
+              sections: {
+                basic: "Basic",
+                contact: "Contact",
+                amounts: "Amounts",
+              },
+            },
+      
+            detail: {
+              title: "Quote Details",
+              sections: {
+                basic: "Basic",
+                contact: "Contact",
+                amounts: "Amounts",
+                audit: "Audit",
+              },
+            },
+      
+            delete: {
+              title: "Delete quote",
+              description: "Are you sure you want to delete quote",
+            },
+          },
     },
     library: {
         matrices: {

@@ -467,22 +467,85 @@ export default {
               description: "Bạn có chắc chắn muốn xóa đơn hàng",
             },
           },
-        quotes: {
-            unitPrice: "Đơn giá",
-            tax: "Thuế",
-            subTotal: "Tạm tính",
-            total: "Tổng tiền",
-            quoteId: "ID Báo giá",
-            quoteCode: "Mã số báo giá",
-            clientId: "Khách hàng",
-            salePerson: "Sale phụ trách",
-            samples: "Chi tiết báo giá",
-            totalFeeBeforeTax: "Thành tiền (Chưa thuế)",
-            totalTaxValue: "Tiền thuế",
-            discount: "Chiết khấu",
-            totalAmount: "Tổng cộng thanh toán",
-            quoteStatus: "Trạng thái báo giá",
-        },
+          quotes: {
+            columns: {
+              quoteId: "Mã báo giá",
+              quoteCode: "Mã số báo giá",
+              clientId: "Mã khách hàng",
+              salePersonId: "Sale phụ trách (ID)",
+      
+              totalAmount: "Tổng tiền",
+              quoteStatus: "Trạng thái báo giá",
+      
+              taxRate: "Thuế suất (%)",
+              discount: "Chiết khấu (%)",
+              totalFeeBeforeTax: "Tạm tính (Chưa thuế)",
+              totalFeeBeforeTaxAndDiscount: "Tạm tính gốc",
+              totalTaxValue: "Tiền thuế",
+              totalDiscountValue: "Tiền giảm giá",
+      
+              contactName: "Tên người liên hệ",
+              contactEmail: "Email",
+              contactPhone: "Điện thoại",
+              contactPosition: "Chức vụ",
+            },
+      
+            placeholders: {
+              quoteId: "Tự động tạo...",
+              quoteCode: "Nhập mã báo giá...",
+              clientId: "Nhập mã khách hàng...",
+              salePersonId: "Nhập ID sale...",
+      
+              totalAmount: "Nhập tổng tiền...",
+              quoteStatus: "Chọn trạng thái...",
+      
+              taxRate: "Nhập % thuế...",
+              discount: "Nhập % chiết khấu...",
+      
+              totalFeeBeforeTax: "Nhập tạm tính (chưa thuế)...",
+              totalFeeBeforeTaxAndDiscount: "Nhập tạm tính gốc...",
+              totalTaxValue: "Nhập tiền thuế...",
+              totalDiscountValue: "Nhập tiền giảm giá...",
+      
+              contactName: "Nhập tên người liên hệ...",
+              contactEmail: "Nhập email...",
+              contactPhone: "Nhập số điện thoại...",
+              contactPosition: "Nhập chức vụ...",
+            },
+      
+            status: {
+              draft: "Nháp",
+              sent: "Đã gửi",
+              approved: "Đã duyệt",
+              expired: "Hết hạn",
+            },
+      
+            create: { title: "Tạo báo giá" },
+            update: { title: "Cập nhật báo giá" },
+      
+            form: {
+              sections: {
+                basic: "Thông tin báo giá",
+                contact: "Người liên hệ",
+                amounts: "Thông tin tiền",
+              },
+            },
+      
+            detail: {
+              title: "Chi tiết báo giá",
+              sections: {
+                basic: "Thông tin báo giá",
+                contact: "Người liên hệ",
+                amounts: "Thông tin tiền",
+                audit: "Thông tin hệ thống",
+              },
+            },
+      
+            delete: {
+              title: "Xóa báo giá",
+              description: "Bạn có chắc chắn muốn xóa báo giá",
+            },
+          },
     },
     library: {
         matrices: {
