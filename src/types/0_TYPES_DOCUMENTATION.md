@@ -281,6 +281,9 @@ export interface Receipt extends BaseEntity {
     senderInfo?: Record<string, any>;
     conditionCheck?: Record<string, any>;
     reportConfig?: ReportConfig;
+    receptionistId?: string;
+    isBlindCoded?: boolean;
+    receiptReceivedImageFileIds?: string[] | null;
 }
 
 export interface Sample extends BaseEntity {

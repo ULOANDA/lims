@@ -1,16 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  X,
-  Edit,
-  Save,
-  Upload,
-  FileText,
-  Printer,
-  FileCheck,
-  Mail,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { X, Edit, Save, Upload, FileText, Printer, FileCheck, Mail, ChevronLeft, ChevronRight, ImageOff, Camera, Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -20,1005 +9,1117 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import type { ApiResponse } from "@/api/client";
-import { receiptsUpdate } from "@/api/receipts";
+import { receiptsUpdate, receiptsGetFull } from "@/api/receipts";
 import { receiptsKeys } from "@/api/receiptsKeys";
+import { fileApi, buildFileUploadFormData } from "@/api/files";
 
-import type {
-  ReceiptDetail,
-  ReceiptSample,
-  ReceiptAnalysis,
-  ReceiptsUpdateBody,
-  ReceiptStatus,
-} from "@/types/receipt";
+import type { ReceiptDetail, ReceiptSample, ReceiptAnalysis, ReceiptsUpdateBody, ReceiptStatus } from "@/types/receipt";
 
 import { SampleDetailModal } from "./SampleDetailModal";
 
 interface ReceiptDetailModalProps {
-  receipt: ReceiptDetail;
-  onClose: () => void;
+    receipt: ReceiptDetail;
+    onClose: () => void;
 
-  onSampleClick: (sample: ReceiptSample) => void;
+    onSampleClick: (sample: ReceiptSample) => void;
 
-  onUpdated?: (next: ReceiptDetail) => void;
+    onUpdated?: (next: ReceiptDetail) => void;
 }
 
-type SampleImage = {
-  id: string;
-  url: string;
-  caption?: string;
-  uploadedDate: string;
-};
-
-const RECEIPT_STATUS_OPTIONS: ReceiptStatus[] = [
-  "Draft",
-  "Received",
-  "Processing",
-  "Completed",
-  "Reported",
-  "Cancelled",
-];
-
-function unwrapApi<T>(res: ApiResponse<T>): T {
-  if (!res.success) throw new Error(res.error?.message ?? "Request failed");
-  if (res.data === undefined) throw new Error("Response data is missing");
-  return res.data;
-}
+const RECEIPT_STATUS_OPTIONS: ReceiptStatus[] = ["Draft", "Received", "Processing", "Completed", "Reported", "Cancelled"];
 
 function getErrorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error && e.message.trim().length > 0) return e.message;
-  return fallback;
+    if (e instanceof Error && e.message.trim().length > 0) return e.message;
+    return fallback;
 }
 
 function receiptStatusKey(status: ReceiptStatus): string | null {
-  if (status === "Draft") return "reception.receipts.status.draft";
-  if (status === "Received") return "reception.receipts.status.receive";
-  if (status === "Processing") return "reception.receipts.status.processing";
-  if (status === "Completed") return "reception.receipts.status.completed";
-  if (status === "Reported") return "reception.receipts.status.reported";
-  if (status === "Cancelled") return "reception.receipts.status.cancelled";
-  return null;
+    if (status === "Draft") return "reception.receipts.status.draft";
+    if (status === "Received") return "reception.receipts.status.receive";
+    if (status === "Processing") return "reception.receipts.status.processing";
+    if (status === "Completed") return "reception.receipts.status.completed";
+    if (status === "Reported") return "reception.receipts.status.reported";
+    if (status === "Cancelled") return "reception.receipts.status.cancelled";
+    return null;
 }
 
-function receiptStatusLabel(
-  t: (key: string, options?: Record<string, unknown>) => unknown,
-  status: ReceiptStatus,
-) {
-  const key = receiptStatusKey(status);
-  return String(key ? t(key, { defaultValue: status }) : status);
+function receiptStatusLabel(t: (key: string, options?: Record<string, unknown>) => unknown, status: ReceiptStatus) {
+    const key = receiptStatusKey(status);
+    return String(key ? t(key, { defaultValue: status }) : status);
 }
 
-function getReceiptStatusBadge(
-  t: (key: string, options?: Record<string, unknown>) => unknown,
-  status: ReceiptStatus | null | undefined
-) {
-  const st = status ?? "";
-  const key = status ? receiptStatusKey(status) : null;
-  const label = String(key ? t(key, { defaultValue: st }) : st || "-");
+function getReceiptStatusBadge(t: (key: string, options?: Record<string, unknown>) => unknown, status: ReceiptStatus | null | undefined) {
+    const st = status ?? "";
+    const key = status ? receiptStatusKey(status) : null;
+    const label = String(key ? t(key, { defaultValue: st }) : st || "-");
 
-  switch (status) {
-    case "Draft":
-      return (
-        <Badge
-          variant="outline"
-          className="text-xs text-muted-foreground border-border">
-          {label}
-        </Badge>
-      );
+    switch (status) {
+        case "Draft":
+            return (
+                <Badge variant="outline" className="text-xs text-muted-foreground border-border">
+                    {label}
+                </Badge>
+            );
 
-    case "Received":
-      return (
-        <Badge
-          variant="outline"
-          className="text-xs text-muted-foreground border-border">
-          {label}
-        </Badge>
-      );
+        case "Received":
+            return (
+                <Badge variant="outline" className="text-xs text-muted-foreground border-border">
+                    {label}
+                </Badge>
+            );
 
-    case "Processing":
-      return (
-        <Badge
-          variant="default"
-          className="text-xs bg-warning text-warning-foreground hover:bg-warning/90">
-          {label}
-        </Badge>
-      );
+        case "Processing":
+            return (
+                <Badge variant="default" className="text-xs bg-warning text-warning-foreground hover:bg-warning/90">
+                    {label}
+                </Badge>
+            );
 
-    case "Completed":
-      return (
-        <Badge
-          variant="default"
-          className="text-xs bg-success text-success-foreground hover:bg-success/90">
-          {label}
-        </Badge>
-      );
+        case "Completed":
+            return (
+                <Badge variant="default" className="text-xs bg-success text-success-foreground hover:bg-success/90">
+                    {label}
+                </Badge>
+            );
 
-    case "Reported":
-      return (
-        <Badge
-          variant="default"
-          className="text-xs bg-primary text-primary-foreground hover:bg-primary/90">
-          {label}
-        </Badge>
-      );
+        case "Reported":
+            return (
+                <Badge variant="default" className="text-xs bg-primary text-primary-foreground hover:bg-primary/90">
+                    {label}
+                </Badge>
+            );
 
-    case "Cancelled":
-      return (
-        <Badge variant="destructive" className="text-xs">
-          {label}
-        </Badge>
-      );
+        case "Cancelled":
+            return (
+                <Badge variant="destructive" className="text-xs">
+                    {label}
+                </Badge>
+            );
 
-    default:
-      return (
-        <Badge variant="secondary" className="text-xs text-muted-foreground">
-          {label}
-        </Badge>
-      );
-  }
+        default:
+            return (
+                <Badge variant="secondary" className="text-xs text-muted-foreground">
+                    {label}
+                </Badge>
+            );
+    }
 }
 
-function getAnalysisStatusBadge(
-  t: (key: string, options?: Record<string, unknown>) => unknown,
-  status: ReceiptAnalysis["analysisStatus"]
-) {
-  switch (status) {
-    case "Pending":
-      return (
-        <Badge
-          variant="outline"
-          className="text-xs bg-muted text-muted-foreground">
-          {String(t("lab.analyses.status.Pending"))}
-        </Badge>
-      );
-    case "Testing":
-      return (
-        <Badge variant="default" className="text-xs">
-          {String(t("lab.analyses.status.Testing"))}
-        </Badge>
-      );
-    case "Approved":
-      return (
-        <Badge variant="default" className="text-xs">
-          {String(t("lab.analyses.status.Approved"))}
-        </Badge>
-      );
-    case "Review":
-      return (
-        <Badge variant="default" className="text-xs">
-          {String(t("lab.analyses.status.Review"))}
-        </Badge>
-      );
-    default:
-      return (
-        <Badge variant="secondary" className="text-xs">
-          {String(status ?? "")}
-        </Badge>
-      );
-  }
+function getAnalysisStatusBadge(t: (key: string, options?: Record<string, unknown>) => unknown, status: ReceiptAnalysis["analysisStatus"]) {
+    switch (status) {
+        case "Pending":
+            return (
+                <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
+                    {String(t("lab.analyses.status.Pending"))}
+                </Badge>
+            );
+        case "Testing":
+            return (
+                <Badge variant="default" className="text-xs">
+                    {String(t("lab.analyses.status.Testing"))}
+                </Badge>
+            );
+        case "Approved":
+            return (
+                <Badge variant="default" className="text-xs">
+                    {String(t("lab.analyses.status.Approved"))}
+                </Badge>
+            );
+        case "Review":
+            return (
+                <Badge variant="default" className="text-xs">
+                    {String(t("lab.analyses.status.Review"))}
+                </Badge>
+            );
+        default:
+            return (
+                <Badge variant="secondary" className="text-xs">
+                    {String(status ?? "")}
+                </Badge>
+            );
+    }
 }
 
-export function ReceiptDetailModal({
-  receipt,
-  onClose,
-  onSampleClick,
-  onUpdated,
-}: ReceiptDetailModalProps) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
+export function ReceiptDetailModal({ receipt, onClose, onSampleClick, onUpdated }: ReceiptDetailModalProps) {
+    const { t } = useTranslation();
+    const qc = useQueryClient();
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedReceipt, setEditedReceipt] = useState<ReceiptDetail>(receipt);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedReceipt, setEditedReceipt] = useState<ReceiptDetail>(receipt);
 
-  useEffect(() => {
-    setEditedReceipt(receipt);
-    setIsEditing(false);
-  }, [receipt]);
+    useEffect(() => {
+        setEditedReceipt(receipt);
+        setIsEditing(false);
+    }, [receipt]);
 
-  const [showEmailModal, setShowEmailModal] = useState(false);
+    const [showEmailModal, setShowEmailModal] = useState(false);
 
-  const [sampleImages] = useState<SampleImage[]>([]);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    // ── Image viewer state ──────────────────────────────────────────────────
+    type LoadedImage = { fileId: string; url: string };
+    const [loadedImages, setLoadedImages] = useState<LoadedImage[]>([]);
+    const [imageLoading, setImageLoading] = useState(false);
+    const [focusedImageIdx, setFocusedImageIdx] = useState(0);
+    const thumbnailsRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+    const [isUploading, setIsUploading] = useState(false);
 
-  const samples = editedReceipt.samples ?? [];
+    // Manage Manage Images state
+    const [manageModalOpen, setManageModalOpen] = useState(false);
+    const [manageImages, setManageImages] = useState<LoadedImage[]>([]);
+    const [manageSelectedIds, setManageSelectedIds] = useState<string[]>([]);
 
-  const getAnalysesForSample = (sample: ReceiptSample): ReceiptAnalysis[] => {
-    return (sample.analyses ?? []).filter((a) => Boolean(a?.analysisId));
-  };
+    // Safely parse fileIds whether it comes as array, stringified array, or pg array string
+    const rawFileIds = editedReceipt.receiptReceivedImageFileIds as unknown as string[] | string | null | undefined;
+    const fileIds: string[] = useMemo(() => {
+        if (!rawFileIds) return [];
+        if (Array.isArray(rawFileIds)) {
+            return rawFileIds.map((f) => (typeof f === "string" ? f : ((f as any)?.fileId ?? (f as any)?.id ?? String(f)))).filter(Boolean);
+        }
+        if (typeof rawFileIds === "string") {
+            try {
+                // Try to parse JSON array '["file_1"]'
+                const parsed = JSON.parse(rawFileIds);
+                if (Array.isArray(parsed)) return parsed.map(String);
+            } catch {
+                // Handle postgres `{val1,val2}` format
+                if ((rawFileIds as any).startsWith("{") && (rawFileIds as any).endsWith("}")) {
+                    return (rawFileIds as any)
+                        .slice(1, -1)
+                        .split(",")
+                        .map((v: string) => v.trim().replace(/^"|"$/g, ""))
+                        .filter(Boolean);
+                }
+                return [rawFileIds]; // single string
+            }
+        }
+        return [];
+    }, [rawFileIds]);
 
-  const emailDefaults = useMemo(() => {
-    const toEmail =
-      editedReceipt.client?.clientEmail ??
-      editedReceipt.reportRecipient?.receiverEmail ??
-      "";
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
 
-    return {
-      from: String(
-        t("reception.receiptDetail.emailTemplate.from", { defaultValue: "" })
-      ),
-      to: toEmail,
-      subject: String(
-        t("reception.receiptDetail.emailTemplate.subject", {
-          code: editedReceipt.receiptCode,
-        })
-      ),
-      content: String(
-        t("reception.receiptDetail.emailTemplate.content", {
-          clientName: editedReceipt.client?.clientName ?? "",
-          receiptCode: editedReceipt.receiptCode ?? "",
-          receiptDate: editedReceipt.receiptDate?.split("T")[0] ?? "",
-          deadline: editedReceipt.receiptDeadline?.split("T")[0] ?? "",
-        })
-      ),
-      attachments: [] as string[],
-    };
-  }, [editedReceipt, t]);
+        try {
+            setIsUploading(true);
+            const newLoaded: LoadedImage[] = [];
+            const newFileIds: string[] = [];
 
-  const [emailForm, setEmailForm] = useState(emailDefaults);
+            for (const file of files) {
+                const formData = buildFileUploadFormData(file, {
+                    commonKeys: [editedReceipt.receiptCode ?? ""],
+                    fileTags: ["Received Image"],
+                });
 
-  useEffect(() => {
-    setEmailForm(emailDefaults);
-  }, [emailDefaults]);
+                const uploadRes: any = await fileApi.upload(formData);
+                const newFileId = uploadRes?.data?.fileId ?? uploadRes?.fileId;
 
-  const updateMut = useMutation({
-    mutationFn: (body: ReceiptsUpdateBody) => receiptsUpdate({ body }),
-    onSuccess: async (res) => {
-      const next = unwrapApi(res);
+                if (newFileId) {
+                    newFileIds.push(newFileId);
+                    try {
+                        const urlRes: any = await fileApi.url(newFileId, 3600);
+                        const url = urlRes?.data?.url ?? urlRes?.url;
+                        if (url) newLoaded.push({ fileId: newFileId, url });
+                    } catch {
+                        // ignore
+                    }
+                }
+            }
 
-      setEditedReceipt(next);
-      onUpdated?.(next);
-
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: receiptsKeys.list(undefined) }),
-        qc.invalidateQueries({
-          queryKey: receiptsKeys.detail(receipt.receiptId),
-        }),
-        qc.invalidateQueries({
-          queryKey: receiptsKeys.full(receipt.receiptId),
-        }),
-      ]);
-
-      toast.success(String(t("common.toast.saved")));
-      setIsEditing(false);
-    },
-    onError: (e) => {
-      toast.error(getErrorMessage(e, String(t("common.toast.error"))));
-    },
-  });
-
-  const handleSave = async () => {
-    const body: ReceiptsUpdateBody = {
-      receiptId: editedReceipt.receiptId,
-      receiptStatus: editedReceipt.receiptStatus ?? null,
-      receiptDeadline: editedReceipt.receiptDeadline ?? null,
-      receiptNote: editedReceipt.receiptNote ?? null,
-      client: editedReceipt.client
-        ? {
-            clientId: editedReceipt.client.clientId ?? null,
-            clientName: editedReceipt.client.clientName ?? null,
-          }
-        : null,
+            if (newLoaded.length > 0) {
+                const combined = [...loadedImages];
+                newLoaded.forEach((nl) => {
+                    if (!combined.some((c) => c.fileId === nl.fileId)) combined.push(nl);
+                });
+                setManageImages(combined);
+                setManageSelectedIds([...fileIds, ...newFileIds]);
+                setManageModalOpen(true);
+            }
+        } catch (err) {
+            toast.error(getErrorMessage(err, "Upload failed"));
+        } finally {
+            setIsUploading(false);
+            if (e.target) e.target.value = "";
+        }
     };
 
-    await updateMut.mutateAsync(body);
-  };
+    const handleFindRelated = async () => {
+        if (!editedReceipt.receiptCode) return;
+        try {
+            setIsUploading(true);
+            const res: any = await fileApi.list({
+                fileTags: ["Received Image"],
+                commonKeys: [editedReceipt.receiptCode],
+            });
+            const fetchedItems = res?.data ?? [];
+            if (fetchedItems.length === 0) {
+                toast.info(String(t("reception.receiptDetail.noRelatedImages", { defaultValue: "Không tìm thấy ảnh liên quan." })));
+                return;
+            }
 
-  const handlePrevImage = () => {
-    setCurrentImageIndex((prev) =>
-      prev === 0 ? sampleImages.length - 1 : prev - 1
-    );
-  };
+            const newLoaded: LoadedImage[] = [];
+            for (const item of fetchedItems) {
+                const fid = item.fileId ?? item.id;
+                if (!fid) continue;
+                let url = loadedImages.find((l: LoadedImage) => l.fileId === fid)?.url;
+                if (!url) {
+                    try {
+                        const urlRes: any = await fileApi.url(fid, 3600);
+                        url = urlRes?.data?.url ?? urlRes?.url;
+                    } catch {
+                        // ignore fail
+                    }
+                }
+                if (url) newLoaded.push({ fileId: fid, url });
+            }
 
-  const handleNextImage = () => {
-    setCurrentImageIndex((prev) =>
-      prev === sampleImages.length - 1 ? 0 : prev + 1
-    );
-  };
+            const combined = [...loadedImages];
+            newLoaded.forEach((nl) => {
+                if (!combined.some((c) => c.fileId === nl.fileId)) combined.push(nl);
+            });
+            setManageImages(combined);
+            setManageSelectedIds([...fileIds]);
+            setManageModalOpen(true);
+        } catch (err) {
+            toast.error(getErrorMessage(err, "Search failed"));
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
-  const handleEmailChange = (
-    field: "from" | "to" | "subject" | "content",
-    value: string
-  ) => {
-    setEmailForm((p) => ({ ...p, [field]: value }));
-  };
+    const handleConfirmManage = async () => {
+        try {
+            setIsUploading(true);
+            const body: ReceiptsUpdateBody = {
+                receiptId: editedReceipt.receiptId,
+                receiptReceivedImageFileIds: manageSelectedIds,
+            };
+            await receiptsUpdate({ body });
+            toast.success(String(t("common.toast.saved")));
 
-  const handleSendEmail = () => {
-    // eslint-disable-next-line no-console
-    console.log("Sending email:", emailForm);
-    setShowEmailModal(false);
-  };
+            // refetch
+            const fullRes: any = await receiptsGetFull({ receiptId: receipt.receiptId });
+            const fullData: ReceiptDetail = fullRes?.data !== undefined ? fullRes.data : fullRes;
+            setEditedReceipt(fullData);
+            onUpdated?.(fullData);
 
-  const [openSampleModal, setOpenSampleModal] = useState(false);
-  const [selectedSample, setSelectedSample] = useState<ReceiptSample | null>(
-    null
-  );
-  const [focusAnalysisId, setFocusAnalysisId] = useState<string | null>(null);
+            setManageModalOpen(false);
+        } catch (err) {
+            toast.error(getErrorMessage(err, String(t("common.toast.error"))));
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
-  useEffect(() => {
-    setOpenSampleModal(false);
-    setSelectedSample(null);
-    setFocusAnalysisId(null);
-  }, [receipt.receiptId]);
+    // Fetch signed URLs whenever fileIds changes
+    useEffect(() => {
+        if (fileIds.length === 0) {
+            setLoadedImages([]);
+            setFocusedImageIdx(0);
+            return;
+        }
+        let cancelled = false;
+        setImageLoading(true);
+        Promise.all(
+            fileIds.map(async (fid: string) => {
+                try {
+                    const res: any = await fileApi.url(fid, 3600);
+                    const url = res?.data?.url ?? res?.url ?? null;
+                    return url ? { fileId: fid, url } : null;
+                } catch {
+                    return null;
+                }
+            }),
+        ).then((results) => {
+            if (!cancelled) {
+                setLoadedImages(results.filter((u: LoadedImage | null): u is LoadedImage => u !== null));
+                setFocusedImageIdx(0);
+                setImageLoading(false);
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [fileIds]);
 
-  const openSampleByLabId = (
-    sample: ReceiptSample,
-    analysisId: string | null
-  ) => {
-    setSelectedSample(sample);
-    setFocusAnalysisId(analysisId);
-    setOpenSampleModal(true);
-  };
+    const handlePrevImg = useCallback(() => setFocusedImageIdx((i: number) => (i === 0 ? loadedImages.length - 1 : i - 1)), [loadedImages.length]);
+    const handleNextImg = useCallback(() => setFocusedImageIdx((i: number) => (i === loadedImages.length - 1 ? 0 : i + 1)), [loadedImages.length]);
 
-  const closeSampleModal = () => {
-    setOpenSampleModal(false);
-    setSelectedSample(null);
-    setFocusAnalysisId(null);
-  };
+    // scroll selected thumbnail into view
+    useEffect(() => {
+        if (!thumbnailsRef.current) return;
+        const el = thumbnailsRef.current.children[focusedImageIdx] as HTMLElement | undefined;
+        el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }, [focusedImageIdx]);
 
-  const handleSaveSample = async (updatedSample: ReceiptSample) => {
-    setEditedReceipt((prev) => {
-      const nextSamples = (prev.samples ?? []).map((s) =>
-        s.sampleId === updatedSample.sampleId ? updatedSample : s
-      );
-      const next: ReceiptDetail = { ...prev, samples: nextSamples };
-      onUpdated?.(next);
-      return next;
+    const samples = editedReceipt.samples ?? [];
+
+    const getAnalysesForSample = useCallback((sample: ReceiptSample): ReceiptAnalysis[] => {
+        return (sample.analyses ?? []).filter((a) => Boolean(a?.analysisId));
+    }, []);
+
+    const emailDefaults = useMemo(() => {
+        const toEmail = editedReceipt.client?.clientEmail ?? editedReceipt.reportRecipient?.receiverEmail ?? "";
+
+        return {
+            from: String(t("reception.receiptDetail.emailTemplate.from", { defaultValue: "" })),
+            to: toEmail,
+            subject: String(
+                t("reception.receiptDetail.emailTemplate.subject", {
+                    code: editedReceipt.receiptCode,
+                }),
+            ),
+            content: String(
+                t("reception.receiptDetail.emailTemplate.content", {
+                    clientName: editedReceipt.client?.clientName ?? "",
+                    receiptCode: editedReceipt.receiptCode ?? "",
+                    receiptDate: editedReceipt.receiptDate?.split("T")[0] ?? "",
+                    deadline: editedReceipt.receiptDeadline?.split("T")[0] ?? "",
+                }),
+            ),
+            attachments: [] as string[],
+        };
+    }, [editedReceipt, t]);
+
+    const [emailForm, setEmailForm] = useState(emailDefaults);
+
+    useEffect(() => {
+        setEmailForm(emailDefaults);
+    }, [emailDefaults]);
+
+    const updateMut = useMutation({
+        mutationFn: (body: ReceiptsUpdateBody) => receiptsUpdate({ body }),
+        onSuccess: async () => {
+            // Re-fetch full receipt to get all nested data (samples, analyses, images...)
+            try {
+                const fullRes: any = await receiptsGetFull({ receiptId: receipt.receiptId });
+                const fullData: ReceiptDetail = fullRes?.data !== undefined ? fullRes.data : fullRes;
+                setEditedReceipt(fullData);
+                onUpdated?.(fullData);
+            } catch {
+                // fallback: just invalidate
+            }
+
+            await Promise.all([
+                qc.invalidateQueries({ queryKey: receiptsKeys.list(undefined) }),
+                qc.invalidateQueries({
+                    queryKey: receiptsKeys.detail(receipt.receiptId),
+                }),
+                qc.invalidateQueries({
+                    queryKey: receiptsKeys.full(receipt.receiptId),
+                }),
+            ]);
+
+            toast.success(String(t("common.toast.saved")));
+            setIsEditing(false);
+        },
+        onError: (e) => {
+            toast.error(getErrorMessage(e, String(t("common.toast.error"))));
+        },
     });
 
-    toast.success(String(t("common.toast.saved")));
-    closeSampleModal();
-  };
+    const handleSave = async () => {
+        const body: ReceiptsUpdateBody = {
+            receiptId: editedReceipt.receiptId,
+            receiptStatus: editedReceipt.receiptStatus ?? null,
+            receiptDeadline: editedReceipt.receiptDeadline ?? null,
+            receiptNote: editedReceipt.receiptNote ?? null,
+            client: editedReceipt.client
+                ? {
+                      clientId: editedReceipt.client.clientId ?? null,
+                      clientName: editedReceipt.client.clientName ?? null,
+                  }
+                : null,
+        };
 
-  return (
-    <>
-      <div className="fixed inset-0 bg-foreground/50 z-50" onClick={onClose} />
+        await updateMut.mutateAsync(body);
+    };
 
-      <div className="fixed inset-4 bg-background rounded-lg shadow-xl z-50 flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">
-              {String(
-                t("reception.receiptDetail.title", {
-                  code: receipt.receiptCode,
-                })
-              )}
-            </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {String(t("reception.receiptDetail.description"))}
-            </p>
-          </div>
+    // legacy stubs — no longer used (kept to avoid downstream reference errors)
+    const handlePrevImage = handlePrevImg;
+    const handleNextImage = handleNextImg;
 
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              onClick={() => console.log("Print label")}
-              variant="outline"
-              className="flex items-center gap-1.5 text-xs">
-              <Printer className="h-3.5 w-3.5" />
-              {String(t("reception.receiptDetail.printLabel"))}
-            </Button>
+    const handleEmailChange = useCallback((field: "from" | "to" | "subject" | "content", value: string) => {
+        setEmailForm((p) => ({ ...p, [field]: value }));
+    }, []);
 
-            <Button
-              size="sm"
-              onClick={() => console.log("Export handover")}
-              variant="outline"
-              className="flex items-center gap-1.5 text-xs">
-              <FileCheck className="h-3.5 w-3.5" />
-              {String(t("reception.receiptDetail.exportHandover"))}
-            </Button>
+    const handleSendEmail = useCallback(() => {
+        // eslint-disable-next-line no-console
+        console.log("Sending email:", emailForm);
+        setShowEmailModal(false);
+    }, [emailForm]);
 
-            {!isEditing ? (
-              <Button
-                size="sm"
-                onClick={() => setIsEditing(true)}
-                className="flex items-center gap-1.5 text-xs">
-                <Edit className="h-3.5 w-3.5" />
-                {String(t("common.edit"))}
-              </Button>
-            ) : (
-              <>
-                <Button
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={updateMut.isPending}
-                  className="flex items-center gap-1.5 text-xs">
-                  <Save className="h-3.5 w-3.5" />
-                  {String(t("common.save"))}
-                </Button>
+    const [openSampleModal, setOpenSampleModal] = useState(false);
+    const [selectedSample, setSelectedSample] = useState<ReceiptSample | null>(null);
+    const [focusAnalysisId, setFocusAnalysisId] = useState<string | null>(null);
 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={updateMut.isPending}
-                  onClick={() => {
-                    setEditedReceipt(receipt);
-                    setIsEditing(false);
-                  }}
-                  className="text-xs">
-                  {String(t("common.cancel"))}
-                </Button>
-              </>
-            )}
+    useEffect(() => {
+        setOpenSampleModal(false);
+        setSelectedSample(null);
+        setFocusAnalysisId(null);
+    }, [receipt.receiptId]);
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="h-8 w-8 p-0">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+    const openSampleByLabId = useCallback((sample: ReceiptSample, analysisId: string | null) => {
+        setSelectedSample(sample);
+        setFocusAnalysisId(analysisId);
+        setOpenSampleModal(true);
+    }, []);
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div className="flex gap-4">
-            <div className="flex-1 bg-muted/30 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-foreground mb-3">
-                {String(t("reception.receiptDetail.description"))}
-              </h3>
+    const closeSampleModal = useCallback(() => {
+        setOpenSampleModal(false);
+        setSelectedSample(null);
+        setFocusAnalysisId(null);
+    }, []);
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("lab.receipts.receiptCode"))}
-                  </Label>
-                  <div className="mt-1 font-medium text-foreground">
-                    {editedReceipt.receiptCode ?? "-"}
-                  </div>
-                </div>
+    const handleSaveSample = async (updatedSample: ReceiptSample) => {
+        setEditedReceipt((prev: ReceiptDetail) => {
+            const nextSamples = (prev.samples ?? []).map((s: ReceiptSample) => (s.sampleId === updatedSample.sampleId ? updatedSample : s));
+            const next: ReceiptDetail = { ...prev, samples: nextSamples };
+            onUpdated?.(next);
+            return next;
+        });
 
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("crm.clients.clientName"))}
-                  </Label>
-                  {isEditing ? (
-                    <Input
-                      value={editedReceipt.client?.clientName ?? ""}
-                      onChange={(e) =>
-                        setEditedReceipt((p) => ({
-                          ...p,
-                          client: {
-                            ...(p.client ?? { clientId: "" }),
-                            clientName: e.target.value,
-                          },
-                        }))
-                      }
-                      className="mt-1 bg-background"
-                    />
-                  ) : (
-                    <div className="mt-1 font-medium text-foreground">
-                      {editedReceipt.client?.clientName ?? "-"}
+        toast.success(String(t("common.toast.saved")));
+        closeSampleModal();
+    };
+
+    const samplesTableJSX = useMemo(
+        () => (
+            <div>
+                <h3 className="font-semibold text-foreground mb-4">{String(t("reception.createReceipt.samplesList"))}</h3>
+
+                <div className="bg-background border border-border rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-muted/50 border-b border-border">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{String(t("lab.samples.sampleId"))}</th>
+
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{String(t("lab.samples.sampleName"))}</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{String(t("lab.samples.sampleTypeName"))}</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{String(t("lab.analyses.analysisId", { defaultValue: "Mã phép thử" }))}</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{String(t("lab.analyses.parameterName"))}</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{String(t("lab.analyses.protocolCode"))}</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{String(t("lab.analyses.technicianIds"))}</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{String(t("lab.analyses.analysisStatus"))}</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{String(t("lab.analyses.analysisResult"))}</th>
+                                </tr>
+                            </thead>
+
+                            <tbody className="divide-y divide-border">
+                                {samples.map((sample: ReceiptSample) => {
+                                    const analyses = getAnalysesForSample(sample);
+
+                                    return (
+                                        <React.Fragment key={sample.sampleId}>
+                                            {analyses.length > 0 ? (
+                                                analyses.map((analysis, index) => (
+                                                    <tr key={analysis.analysisId} className="hover:bg-muted/30">
+                                                        {index === 0 && (
+                                                            <>
+                                                                <td className="px-4 py-3 align-top border-r bg-primary/5" rowSpan={analyses.length}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            onSampleClick(sample);
+                                                                            openSampleByLabId(sample, null);
+                                                                        }}
+                                                                        className="font-medium text-primary hover:text-primary/80 hover:underline text-sm"
+                                                                    >
+                                                                        {sample.sampleId}
+                                                                    </button>
+                                                                </td>
+                                                                <td className="px-4 py-3 align-top border-r bg-primary/5" rowSpan={analyses.length}>
+                                                                    <div className="text-sm text-foreground">{sample.sampleClientInfo ?? "-"}</div>
+                                                                </td>
+                                                                <td className="px-4 py-3 align-top border-r bg-primary/5" rowSpan={analyses.length}>
+                                                                    <Badge variant="outline" className="text-xs">
+                                                                        {sample.sampleTypeName ?? "-"}
+                                                                    </Badge>
+                                                                </td>
+                                                            </>
+                                                        )}
+
+                                                        <td className="px-4 py-3 text-sm">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openSampleByLabId(sample, analysis.analysisId)}
+                                                                className="font-medium text-primary hover:text-primary/80 hover:underline whitespace-nowrap"
+                                                            >
+                                                                {analysis.analysisId}
+                                                            </button>
+                                                        </td>
+
+                                                        <td className="px-4 py-3 text-sm text-foreground">{analysis.parameterName ?? "-"}</td>
+                                                        <td className="px-4 py-3 text-xs text-muted-foreground">{analysis.protocolCode ?? "-"}</td>
+                                                        <td className="px-4 py-3 text-sm text-foreground">{analysis.technician?.identityName ?? analysis.technicianId ?? "-"}</td>
+                                                        <td className="px-4 py-3">{getAnalysisStatusBadge(t, analysis.analysisStatus)}</td>
+                                                        <td className="px-4 py-3">
+                                                            {analysis.analysisResult != null ? (
+                                                                <div className="text-sm font-medium text-foreground">
+                                                                    {String(analysis.analysisResult)} {analysis.analysisUnit ?? ""}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-sm text-muted-foreground">-</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr className="hover:bg-muted/30">
+                                                    <td className="px-4 py-3 align-top border-r bg-primary/5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                onSampleClick(sample);
+                                                                openSampleByLabId(sample, null);
+                                                            }}
+                                                            className="font-medium text-primary hover:text-primary/80 hover:underline text-sm"
+                                                        >
+                                                            {sample.sampleId}
+                                                        </button>
+                                                    </td>
+                                                    <td className="px-4 py-3 align-top border-r bg-primary/5">
+                                                        <div className="text-sm text-foreground">{sample.sampleClientInfo ?? "-"}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 align-top border-r bg-primary/5">
+                                                        <Badge variant="outline" className="text-xs">
+                                                            {sample.sampleTypeName ?? "-"}
+                                                        </Badge>
+                                                    </td>
+
+                                                    <td className="px-4 py-3 text-sm text-muted-foreground">-</td>
+
+                                                    <td colSpan={5} className="px-4 py-3 text-center text-muted-foreground text-sm">
+                                                        {String(t("reception.createReceipt.noAnalysis"))}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
-                  )}
                 </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("crm.clients.clientAddress"))}
-                  </Label>
-                  <div className="mt-1 text-foreground">
-                    {editedReceipt.client?.clientAddress ?? "-"}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("reception.createReceipt.contactInfo"))}
-                  </Label>
-                  <div className="mt-1 text-foreground">
-                    {editedReceipt.client?.clientPhone ?? "-"} -{" "}
-                    {editedReceipt.client?.clientEmail ?? "-"}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("reception.receiptDetail.sendMail"))}
-                  </Label>
-                  <div className="mt-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex items-center gap-2"
-                      onClick={() => setShowEmailModal(true)}>
-                      <Mail className="h-4 w-4" />
-                      {String(t("reception.receiptDetail.sendMail"))}
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("lab.receipts.receiptDate"))}
-                  </Label>
-                  <div className="mt-1 text-foreground">
-                    {editedReceipt.receiptDate?.split("T")[0] ?? "-"}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("reception.sampleDetail.receivedBy"))}
-                  </Label>
-                  <div className="mt-1 text-foreground">
-                    {editedReceipt.createdBy?.identityName ?? "-"}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("lab.receipts.receiptDeadline"))}
-                  </Label>
-                  {isEditing ? (
-                    <Input
-                      value={editedReceipt.receiptDeadline?.split("T")[0] ?? ""}
-                      onChange={(e) =>
-                        setEditedReceipt((p) => ({
-                          ...p,
-                          receiptDeadline: e.target.value,
-                        }))
-                      }
-                      className="mt-1 bg-background"
-                      type="date"
-                    />
-                  ) : (
-                    <div className="mt-1 text-foreground">
-                      {editedReceipt.receiptDeadline?.split("T")[0] ?? "-"}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("lab.receipts.receiptStatus"))}
-                  </Label>
-
-                  <div className="mt-1">
-                    {isEditing ? (
-                      <Select
-                        value={editedReceipt.receiptStatus ?? ""}
-                        onValueChange={(v) =>
-                          setEditedReceipt((p) => ({
-                            ...p,
-                            receiptStatus: v as ReceiptStatus,
-                          }))
-                        }>
-                        <SelectTrigger className="bg-background">
-                          <SelectValue
-                            placeholder={String(t("common.select"))}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {RECEIPT_STATUS_OPTIONS.map((st) => (
-                            <SelectItem key={st} value={st}>
-                              {receiptStatusLabel(t, st)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      getReceiptStatusBadge(t, editedReceipt.receiptStatus)
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("reception.sampleDetail.priority"))}
-                  </Label>
-                  <div className="mt-1">
-                    <Badge
-                      variant={
-                        editedReceipt.receiptPriority === "Urgent"
-                          ? "destructive"
-                          : "secondary"
-                      }>
-                      {String(
-                        editedReceipt.receiptPriority ?? t("common.noData")
-                      )}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="md:col-span-2 lg:col-span-3">
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("lab.receipts.receiptNote"))}
-                  </Label>
-                  {isEditing ? (
-                    <Textarea
-                      value={editedReceipt.receiptNote ?? ""}
-                      onChange={(e) =>
-                        setEditedReceipt((p) => ({
-                          ...p,
-                          receiptNote: e.target.value,
-                        }))
-                      }
-                      className="mt-1 bg-background"
-                      rows={3}
-                    />
-                  ) : (
-                    <div className="mt-1 text-foreground">
-                      {editedReceipt.receiptNote ?? "-"}
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
+        ),
+        [samples, t, openSampleByLabId, onSampleClick, getAnalysesForSample],
+    );
 
-            {sampleImages.length > 0 && (
-              <div className="w-80 bg-muted/30 rounded-lg p-3">
-                <h3 className="text-sm font-semibold text-foreground mb-3">
-                  {String(t("reception.receiptDetail.sampleImage"))}
-                </h3>
-
-                <div className="relative bg-background rounded-lg overflow-hidden mb-3">
-                  <img
-                    src={sampleImages[currentImageIndex].url}
-                    alt={
-                      sampleImages[currentImageIndex].caption ||
-                      `Image ${currentImageIndex + 1}`
-                    }
-                    className="w-full h-64 object-contain"
-                  />
-
-                  {sampleImages.length > 1 && (
-                    <>
-                      <button
-                        onClick={handlePrevImage}
-                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-foreground/50 hover:bg-foreground/70 text-background p-1.5 rounded-full transition-colors">
-                        <ChevronLeft className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={handleNextImage}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-foreground/50 hover:bg-foreground/70 text-background p-1.5 rounded-full transition-colors">
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <h3 className="font-semibold text-foreground mb-4">
-              {String(t("reception.createReceipt.samplesList"))}
-            </h3>
-
-            <div className="bg-background border border-border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-muted/50 border-b border-border">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                        {String(t("lab.analyses.analysisId"))}
-                      </th>
-
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                        {String(t("lab.samples.sampleId"))}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                        {String(t("lab.samples.sampleName"))}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                        {String(t("lab.samples.sampleTypeName"))}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                        {String(t("lab.analyses.parameterName"))}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                        {String(t("lab.analyses.protocolCode"))}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                        {String(t("lab.analyses.technicianIds"))}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                        {String(t("lab.analyses.analysisStatus"))}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                        {String(t("lab.analyses.analysisResult"))}
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-border">
-                    {samples.map((sample) => {
-                      const analyses = getAnalysesForSample(sample);
-
-                      return (
-                        <React.Fragment key={sample.sampleId}>
-                          {analyses.length > 0 ? (
-                            analyses.map((analysis, index) => (
-                              <tr
-                                key={analysis.analysisId}
-                                className="hover:bg-muted/30">
-                                <td className="px-4 py-3 text-sm">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      openSampleByLabId(
-                                        sample,
-                                        analysis.analysisId
-                                      )
-                                    }
-                                    className="font-medium text-primary hover:text-primary/80 hover:underline">
-                                    {analysis.analysisId}
-                                  </button>
-                                </td>
-
-                                {index === 0 && (
-                                  <>
-                                    <td
-                                      className="px-4 py-3 align-top border-r bg-primary/5"
-                                      rowSpan={analyses.length}>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          onSampleClick(sample);
-                                          openSampleByLabId(sample, null);
-                                        }}
-                                        className="font-medium text-primary hover:text-primary/80 hover:underline text-sm">
-                                        {sample.sampleId}
-                                      </button>
-                                    </td>
-                                    <td
-                                      className="px-4 py-3 align-top border-r bg-primary/5"
-                                      rowSpan={analyses.length}>
-                                      <div className="text-sm text-foreground">
-                                        {sample.sampleClientInfo ?? "-"}
-                                      </div>
-                                    </td>
-                                    <td
-                                      className="px-4 py-3 align-top border-r bg-primary/5"
-                                      rowSpan={analyses.length}>
-                                      <Badge
-                                        variant="outline"
-                                        className="text-xs">
-                                        {sample.sampleTypeName ?? "-"}
-                                      </Badge>
-                                    </td>
-                                  </>
-                                )}
-
-                                <td className="px-4 py-3 text-sm text-foreground">
-                                  {analysis.parameterName ?? "-"}
-                                </td>
-                                <td className="px-4 py-3 text-xs text-muted-foreground">
-                                  {analysis.protocolCode ?? "-"}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-foreground">
-                                  {analysis.technician?.identityName ??
-                                    analysis.technicianId ??
-                                    "-"}
-                                </td>
-                                <td className="px-4 py-3">
-                                  {getAnalysisStatusBadge(
-                                    t,
-                                    analysis.analysisStatus
-                                  )}
-                                </td>
-                                <td className="px-4 py-3">
-                                  {analysis.analysisResult != null ? (
-                                    <div className="text-sm font-medium text-foreground">
-                                      {String(analysis.analysisResult)}{" "}
-                                      {analysis.analysisUnit ?? ""}
-                                    </div>
-                                  ) : (
-                                    <span className="text-sm text-muted-foreground">
-                                      -
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr className="hover:bg-muted/30">
-                              <td className="px-4 py-3 text-sm text-muted-foreground">
-                                -
-                              </td>
-
-                              <td className="px-4 py-3 align-top border-r bg-primary/5">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    onSampleClick(sample);
-                                    openSampleByLabId(sample, null);
-                                  }}
-                                  className="font-medium text-primary hover:text-primary/80 hover:underline text-sm">
-                                  {sample.sampleId}
-                                </button>
-                              </td>
-                              <td className="px-4 py-3 align-top border-r bg-primary/5">
-                                <div className="text-sm text-foreground">
-                                  {sample.sampleClientInfo ?? "-"}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 align-top border-r bg-primary/5">
-                                <Badge variant="outline" className="text-xs">
-                                  {sample.sampleTypeName ?? "-"}
-                                </Badge>
-                              </td>
-
-                              <td
-                                colSpan={5}
-                                className="px-4 py-3 text-center text-muted-foreground text-sm">
-                                {String(
-                                  t("reception.createReceipt.noAnalysis")
-                                )}
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-foreground">
-                {String(t("reception.receiptDetail.digitalRecords"))}
-              </h3>
-              <Button
-                size="sm"
-                variant="outline"
-                className="flex items-center gap-2">
-                <Upload className="h-4 w-4" />
-                {String(t("reception.receiptDetail.uploadFile"))}
-              </Button>
-            </div>
-
-            <div className="bg-background border border-border rounded-lg overflow-hidden">
-              <div className="p-8 text-center text-muted-foreground">
-                <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
-                <p>{String(t("reception.receiptDetail.noFile"))}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {openSampleModal && selectedSample && (
-        <SampleDetailModal
-          sample={selectedSample}
-          receipt={editedReceipt}
-          focusAnalysisId={focusAnalysisId}
-          onClose={closeSampleModal}
-          onSave={handleSaveSample}
-        />
-      )}
-
-      {showEmailModal && (
+    return (
         <>
-          <div
-            className="fixed inset-0 bg-foreground/50 z-[60]"
-            onClick={() => setShowEmailModal(false)}
-          />
+            <div className="fixed inset-0 bg-foreground/50 z-50" onClick={onClose} />
 
-          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-3xl mx-auto bg-background rounded-lg shadow-xl z-[60] flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between p-6 border-b border-border">
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">
-                  {String(t("reception.receiptDetail.sendMailTitle"))}
-                </h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {String(t("reception.receiptDetail.sendMailDesc"))}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowEmailModal(false)}
-                className="h-10 w-10 p-0">
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
+            <div className="fixed inset-4 bg-background rounded-lg shadow-xl z-50 flex flex-col">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                    <div>
+                        <h2 className="text-lg font-semibold text-foreground">
+                            {String(
+                                t("reception.receiptDetail.title", {
+                                    code: receipt.receiptCode,
+                                }),
+                            )}
+                        </h2>
+                        <p className="text-xs text-muted-foreground mt-0.5">{String(t("reception.receiptDetail.description"))}</p>
+                    </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("reception.receiptDetail.email.from"))}
-                  </Label>
-                  <Input
-                    value={emailForm.from}
-                    onChange={(e) => handleEmailChange("from", e.target.value)}
-                    className="mt-1 bg-background"
-                  />
+                    <div className="flex items-center gap-2">
+                        <Button size="sm" onClick={() => console.log("Print label")} variant="outline" className="flex items-center gap-1.5 text-xs">
+                            <Printer className="h-3.5 w-3.5" />
+                            {String(t("reception.receiptDetail.printLabel"))}
+                        </Button>
+
+                        <Button size="sm" onClick={() => console.log("Export handover")} variant="outline" className="flex items-center gap-1.5 text-xs">
+                            <FileCheck className="h-3.5 w-3.5" />
+                            {String(t("reception.receiptDetail.exportHandover"))}
+                        </Button>
+
+                        {!isEditing ? (
+                            <Button size="sm" onClick={() => setIsEditing(true)} className="flex items-center gap-1.5 text-xs">
+                                <Edit className="h-3.5 w-3.5" />
+                                {String(t("common.edit"))}
+                            </Button>
+                        ) : (
+                            <>
+                                <Button size="sm" onClick={handleSave} disabled={updateMut.isPending} className="flex items-center gap-1.5 text-xs">
+                                    <Save className="h-3.5 w-3.5" />
+                                    {String(t("common.save"))}
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={updateMut.isPending}
+                                    onClick={() => {
+                                        setEditedReceipt(receipt);
+                                        setIsEditing(false);
+                                    }}
+                                    className="text-xs"
+                                >
+                                    {String(t("common.cancel"))}
+                                </Button>
+                            </>
+                        )}
+
+                        <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
 
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("reception.receiptDetail.email.to"))}
-                  </Label>
-                  <Input
-                    value={emailForm.to}
-                    onChange={(e) => handleEmailChange("to", e.target.value)}
-                    className="mt-1 bg-background"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("reception.receiptDetail.email.subject"))}
-                  </Label>
-                  <Input
-                    value={emailForm.subject}
-                    onChange={(e) =>
-                      handleEmailChange("subject", e.target.value)
-                    }
-                    className="mt-1 bg-background"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("reception.receiptDetail.email.content"))}
-                  </Label>
-                  <Textarea
-                    value={emailForm.content}
-                    onChange={(e) =>
-                      handleEmailChange("content", e.target.value)
-                    }
-                    className="mt-1 bg-background"
-                    rows={10}
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-sm text-muted-foreground">
-                    {String(t("reception.receiptDetail.email.attachments"))}
-                  </Label>
-                  <div className="mt-1 flex items-center gap-2 flex-wrap">
-                    {emailForm.attachments.map((attachment, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-2 bg-muted px-3 py-1 rounded-md">
-                        <FileCheck className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-foreground">
-                          {attachment}
+                <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-background">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-primary-foreground bg-primary px-2.5 py-1 rounded shadow-sm">
+                            {String(t("reception.receiptDetail.infoAndSamples", { defaultValue: "Xem thông tin phiếu và danh sách mẫu/chỉ tiêu." }))}
                         </span>
-                      </div>
-                    ))}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex items-center gap-2">
-                      <Upload className="h-4 w-4" />
-                      {String(t("reception.receiptDetail.uploadFile"))}
-                    </Button>
-                  </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+                        <div className="xl:col-span-3">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-y-5 gap-x-6 text-sm">
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("lab.receipts.receiptCode"))}</Label>
+                                    <div className="mt-1 font-medium text-foreground">{editedReceipt.receiptCode ?? "-"}</div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("crm.clients.clientName"))}</Label>
+                                    {isEditing ? (
+                                        <Input
+                                            value={editedReceipt.client?.clientName ?? ""}
+                                            onChange={(e) =>
+                                                setEditedReceipt((p: ReceiptDetail) => ({
+                                                    ...p,
+                                                    client: {
+                                                        ...(p.client ?? { clientId: "" }),
+                                                        clientName: e.target.value,
+                                                    },
+                                                }))
+                                            }
+                                            className="mt-1 bg-background h-8"
+                                        />
+                                    ) : (
+                                        <div className="mt-1 font-medium text-foreground">{editedReceipt.client?.clientName ?? "-"}</div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.orderCode", { defaultValue: "Mã đơn hàng L/K" }))}</Label>
+                                    <div className="mt-1 text-foreground">{editedReceipt.order?.orderCode ?? "-"}</div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("crm.clients.clientAddress"))}</Label>
+                                    <div className="mt-1 text-foreground">{editedReceipt.client?.clientAddress ?? "-"}</div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.createReceipt.contactInfo", { defaultValue: "Thông tin liên hệ" }))}</Label>
+                                    <div className="mt-1 text-foreground">
+                                        {editedReceipt.client?.clientPhone ? `${editedReceipt.client.clientPhone} - ` : ""}
+                                        {editedReceipt.client?.clientEmail ?? "-"}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.contactPerson", { defaultValue: "Người liên hệ" }))}</Label>
+                                    <div className="mt-1 text-foreground">
+                                        {editedReceipt.contactPerson?.contactName ? `${editedReceipt.contactPerson.contactName} - ${editedReceipt.contactPerson.contactPhone ?? ""}` : "-"}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receiptDetail.sendMail"))}</Label>
+                                    <div className="mt-1">
+                                        <Button size="sm" variant="outline" className="flex items-center gap-2 h-7" onClick={() => setShowEmailModal(true)}>
+                                            <Mail className="h-3 w-3" />
+                                            {String(t("reception.receiptDetail.sendMailTitle"))}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("lab.receipts.receiptStatus"))}</Label>
+                                    {isEditing ? (
+                                        <Select
+                                            value={editedReceipt.receiptStatus ?? ""}
+                                            onValueChange={(val: ReceiptStatus) => setEditedReceipt((p: ReceiptDetail) => ({ ...p, receiptStatus: val }))}
+                                        >
+                                            <SelectTrigger className="w-full mt-1 h-8">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {RECEIPT_STATUS_OPTIONS.map((st) => (
+                                                    <SelectItem key={st} value={st}>
+                                                        {receiptStatusLabel(t, st)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <div className="mt-1">{getReceiptStatusBadge(t, editedReceipt.receiptStatus)}</div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.priority", { defaultValue: "Cấp yêu cầu" }))}</Label>
+                                    <div className="mt-1 text-foreground">{editedReceipt.receiptPriority ?? "-"}</div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.receiptDate", { defaultValue: "Ngày nhận mẫu" }))}</Label>
+                                    <div className="mt-1 text-foreground">{editedReceipt.receiptDate ? new Date(editedReceipt.receiptDate).toLocaleDateString() : "-"}</div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.receiptDeadline", { defaultValue: "Hẹn trả lịch" }))}</Label>
+                                    <div className="mt-1 text-foreground">{editedReceipt.receiptDeadline ? new Date(editedReceipt.receiptDeadline).toLocaleDateString() : "-"}</div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.deliveryMethod", { defaultValue: "Hình thức giao mẫu" }))}</Label>
+                                    <div className="mt-1 text-foreground">{editedReceipt.receiptDeliveryMethod ?? "-"}</div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.trackingNumber", { defaultValue: "Mã vận đơn" }))}</Label>
+                                    <div className="mt-1 text-foreground">{editedReceipt.trackingNumber ?? editedReceipt.receiptTrackingNo ?? "-"}</div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.reportRecipient", { defaultValue: "Nơi nhận phiếu KQ" }))}</Label>
+                                    <div className="mt-1 text-foreground">
+                                        {editedReceipt.reportRecipient?.receiverName ? `${editedReceipt.reportRecipient.receiverName} - ${editedReceipt.reportRecipient.receiverAddress ?? ""}` : "-"}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.senderInfo", { defaultValue: "Thông tin người gửi" }))}</Label>
+                                    <div className="mt-1 text-foreground">{editedReceipt.senderInfo?.name ? `${editedReceipt.senderInfo.name} - ${editedReceipt.senderInfo.phone ?? ""}` : "-"}</div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.invoiceInfo", { defaultValue: "Thông tin xuất hóa đơn" }))}</Label>
+                                    <div className="mt-1 text-foreground">
+                                        {editedReceipt.client?.invoiceInfo?.taxName ? `${editedReceipt.client.invoiceInfo.taxName} (MST: ${editedReceipt.client.invoiceInfo.taxCode || "-"})` : "-"}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.conditionCheck", { defaultValue: "Tình trạng mẫu khi nhận" }))}</Label>
+                                    <div className="mt-1 text-foreground">
+                                        {editedReceipt.conditionCheck ? `Niêm phong: ${editedReceipt.conditionCheck.seal || "-"} / Nhiệt độ: ${editedReceipt.conditionCheck.temp || "-"}` : "-"}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.reportConfig", { defaultValue: "Cấu hình trả KQ" }))}</Label>
+                                    <div className="mt-1 text-foreground">
+                                        {editedReceipt.reportConfig
+                                            ? `Ngôn ngữ: ${editedReceipt.reportConfig.language || "VN"}, Bản cứng: ${editedReceipt.reportConfig.copies || 0}, Bản mềm: ${editedReceipt.reportConfig.sendSoftCopy ? "Có" : "Không"}`
+                                            : "-"}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.isBlindCoded", { defaultValue: "Mã hóa mù" }))}</Label>
+                                    <div className="mt-1 text-foreground">{editedReceipt.isBlindCoded ? "Có" : "Không"}</div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receipts.receptionistId", { defaultValue: "Nhân viên tiếp nhận" }))}</Label>
+                                    <div className="mt-1 text-foreground">{editedReceipt.receptionistId || editedReceipt.createdBy?.identityName || "-"}</div>
+                                </div>
+
+                                <div className="mt-1 col-span-1 md:col-span-3">
+                                    <Label className="text-sm text-muted-foreground">{String(t("lab.receipts.receiptNote"))}</Label>
+                                    {isEditing ? (
+                                        <Textarea
+                                            value={editedReceipt.receiptNote ?? ""}
+                                            onChange={(e) =>
+                                                setEditedReceipt((p: ReceiptDetail) => ({
+                                                    ...p,
+                                                    receiptNote: e.target.value,
+                                                }))
+                                            }
+                                            className="mt-1 bg-background"
+                                            rows={2}
+                                        />
+                                    ) : (
+                                        <div className="mt-1 text-foreground">{editedReceipt.receiptNote ?? "-"}</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="xl:col-span-1 border-t xl:border-t-0 xl:border-l border-border pt-4 xl:pt-0 xl:pl-4 flex flex-col">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm text-muted-foreground">{String(t("reception.receiptDetail.images", { defaultValue: "Ảnh đính kèm" }))}</h3>
+
+                                <div className="flex items-center gap-1.5">
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="h-7 w-7"
+                                        onClick={handleFindRelated}
+                                        disabled={isUploading}
+                                        title={String(t("common.search", { defaultValue: "Tìm ảnh LK" }))}
+                                    >
+                                        <Search className="h-3.5 w-3.5" />
+                                    </Button>
+
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="h-7 w-7"
+                                        title={String(t("common.manage", { defaultValue: "Quản lý" }))}
+                                        onClick={() => {
+                                            setManageImages([...loadedImages]);
+                                            setManageSelectedIds([...fileIds]);
+                                            setManageModalOpen(true);
+                                        }}
+                                    >
+                                        <Edit className="h-3.5 w-3.5" />
+                                    </Button>
+
+                                    <Button
+                                        size="icon"
+                                        variant="default"
+                                        className="h-7 w-7"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={isUploading}
+                                        title={String(t("reception.receiptDetail.uploadFile", { defaultValue: "Tải lên" }))}
+                                    >
+                                        <Upload className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                        size="icon"
+                                        variant="default"
+                                        className="h-7 w-7"
+                                        onClick={() => cameraInputRef.current?.click()}
+                                        disabled={isUploading}
+                                        title={String(t("reception.receiptDetail.takePhoto", { defaultValue: "Chụp ảnh" }))}
+                                    >
+                                        <Camera className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <input type="file" multiple accept="image/*" className="hidden" ref={fileInputRef} onChange={handleUpload} />
+                                    <input type="file" multiple accept="image/*" capture="environment" className="hidden" ref={cameraInputRef} onChange={handleUpload} />
+                                </div>
+                            </div>
+
+                            {imageLoading || isUploading ? (
+                                <div className="flex-1 flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/10 min-h-[300px]">
+                                    <div className="animate-pulse flex flex-col items-center">
+                                        <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
+                                        <div className="text-sm text-muted-foreground">{String(t("common.loading"))}</div>
+                                    </div>
+                                </div>
+                            ) : loadedImages.length === 0 ? (
+                                <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/10 min-h-[300px] text-muted-foreground">
+                                    <ImageOff className="h-12 w-12 mb-3 opacity-20" />
+                                    <p className="text-sm">{String(t("reception.receiptDetail.noImage"))}</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Main Viewer */}
+                                    <div className="relative flex-1 rounded-lg overflow-hidden flex items-center justify-center min-h-[300px] mb-3 group">
+                                        {loadedImages.length > 1 && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={handlePrevImg}
+                                                className="absolute left-2 z-10 bg-black/40 text-white hover:bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <ChevronLeft className="h-6 w-6" />
+                                            </Button>
+                                        )}
+                                        <img src={loadedImages[focusedImageIdx]?.url} alt={`img-${focusedImageIdx}`} className="max-w-full max-h-full object-contain" />
+                                        {loadedImages.length > 1 && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={handleNextImg}
+                                                className="absolute right-2 z-10 bg-black/40 text-white hover:bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <ChevronRight className="h-6 w-6" />
+                                            </Button>
+                                        )}
+                                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-2 py-1 rounded-full px-3">
+                                            {focusedImageIdx + 1} / {loadedImages.length}
+                                        </div>
+                                    </div>
+
+                                    {/* Thumbnail strip */}
+                                    {loadedImages.length > 1 && (
+                                        <div ref={thumbnailsRef} className="flex gap-1.5 overflow-x-auto pb-1 scroll-smooth" style={{ scrollbarWidth: "thin" }}>
+                                            {loadedImages.map((img: LoadedImage, idx: number) => (
+                                                <button
+                                                    key={img.fileId}
+                                                    type="button"
+                                                    onClick={() => setFocusedImageIdx(idx)}
+                                                    className={[
+                                                        "shrink-0 w-14 h-14 rounded border-2 overflow-hidden transition-all",
+                                                        idx === focusedImageIdx ? "border-primary shadow-md" : "border-border opacity-60 hover:opacity-100",
+                                                    ].join(" ")}
+                                                >
+                                                    <img src={img.url} alt={`thumb-${idx + 1}`} className="w-full h-full object-cover" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {samplesTableJSX}
+
+                    <div>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-foreground">{String(t("reception.receiptDetail.digitalRecords"))}</h3>
+                            <Button size="sm" variant="outline" className="flex items-center gap-2">
+                                <Upload className="h-4 w-4" />
+                                {String(t("reception.receiptDetail.uploadFile"))}
+                            </Button>
+                        </div>
+
+                        <div className="bg-background border border-border rounded-lg overflow-hidden">
+                            <div className="p-8 text-center text-muted-foreground">
+                                <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
+                                <p>{String(t("reception.receiptDetail.noFile"))}</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 p-6 border-t border-border">
-              <Button
-                variant="outline"
-                onClick={() => setShowEmailModal(false)}>
-                {String(t("common.cancel"))}
-              </Button>
-              <Button
-                onClick={handleSendEmail}
-                className="flex items-center gap-2">
-                <Mail className="h-4 w-4" />
-                {String(t("reception.receiptDetail.email.send"))}
-              </Button>
-            </div>
-          </div>
+            {openSampleModal && selectedSample && (
+                <SampleDetailModal sample={selectedSample} receipt={editedReceipt} focusAnalysisId={focusAnalysisId} onClose={closeSampleModal} onSave={handleSaveSample} />
+            )}
+
+            {showEmailModal && (
+                <>
+                    <div className="fixed inset-0 bg-foreground/50 z-[60]" onClick={() => setShowEmailModal(false)} />
+
+                    <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-3xl mx-auto bg-background rounded-lg shadow-xl z-[60] flex flex-col max-h-[90vh]">
+                        <div className="flex items-center justify-between p-6 border-b border-border">
+                            <div>
+                                <h2 className="text-xl font-semibold text-foreground">{String(t("reception.receiptDetail.sendMailTitle"))}</h2>
+                                <p className="text-sm text-muted-foreground mt-1">{String(t("reception.receiptDetail.sendMailDesc"))}</p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => setShowEmailModal(false)} className="h-10 w-10 p-0">
+                                <X className="h-5 w-5" />
+                            </Button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="space-y-4">
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receiptDetail.email.from"))}</Label>
+                                    <Input value={emailForm.from} onChange={(e) => handleEmailChange("from", e.target.value)} className="mt-1 bg-background" />
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receiptDetail.email.to"))}</Label>
+                                    <Input value={emailForm.to} onChange={(e) => handleEmailChange("to", e.target.value)} className="mt-1 bg-background" />
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receiptDetail.email.subject"))}</Label>
+                                    <Input value={emailForm.subject} onChange={(e) => handleEmailChange("subject", e.target.value)} className="mt-1 bg-background" />
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receiptDetail.email.content"))}</Label>
+                                    <Textarea value={emailForm.content} onChange={(e) => handleEmailChange("content", e.target.value)} className="mt-1 bg-background" rows={10} />
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground">{String(t("reception.receiptDetail.email.attachments"))}</Label>
+                                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                        {emailForm.attachments.map((attachment: string, index: number) => (
+                                            <div key={index} className="flex items-center gap-2 bg-muted px-3 py-1 rounded-md">
+                                                <FileCheck className="h-4 w-4 text-muted-foreground" />
+                                                <span className="text-sm text-foreground">{attachment}</span>
+                                            </div>
+                                        ))}
+                                        <Button size="sm" variant="outline" className="flex items-center gap-2">
+                                            <Upload className="h-4 w-4" />
+                                            {String(t("reception.receiptDetail.uploadFile"))}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 p-6 border-t border-border">
+                            <Button variant="outline" onClick={() => setShowEmailModal(false)}>
+                                {String(t("common.cancel"))}
+                            </Button>
+                            <Button onClick={handleSendEmail} className="flex items-center gap-2">
+                                <Mail className="h-4 w-4" />
+                                {String(t("reception.receiptDetail.sendMailTitle"))}
+                            </Button>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Manage Images Modal */}
+            {manageModalOpen && (
+                <>
+                    <div className="fixed inset-0 bg-foreground/50 z-[70]" onClick={() => setManageModalOpen(false)} />
+                    <div className="fixed top-1/2 left-1/2 w-full max-w-4xl -translate-x-1/2 -translate-y-1/2 bg-background rounded-lg shadow-xl z-[70] flex flex-col max-h-[90vh]">
+                        <div className="flex items-center justify-between p-4 border-b border-border">
+                            <div>
+                                <h2 className="text-lg font-semibold text-foreground">Quản lý Ảnh Biên nhận</h2>
+                                <p className="text-sm text-muted-foreground mt-0.5">Chọn những ảnh thực tế hiển thị cho biên nhận này.</p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => setManageModalOpen(false)}>
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 flex flex-wrap gap-4 bg-muted/10">
+                            {manageImages.map((img) => {
+                                const selected = manageSelectedIds.includes(img.fileId);
+                                return (
+                                    <div
+                                        key={img.fileId}
+                                        onClick={() => setManageSelectedIds((prev) => (prev.includes(img.fileId) ? prev.filter((id) => id !== img.fileId) : [...prev, img.fileId]))}
+                                        className={`relative w-40 h-40 rounded-lg overflow-hidden border-4 cursor-pointer transition-all ${
+                                            selected ? "border-primary shadow-md" : "border-transparent opacity-70 hover:opacity-100"
+                                        }`}
+                                    >
+                                        <img src={img.url} className="w-full h-full object-cover" alt="preview" />
+                                        {selected && (
+                                            <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1 shadow-sm">
+                                                <Save className="h-4 w-4" />
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            {manageImages.length === 0 && <div className="w-full h-40 flex items-center justify-center text-muted-foreground text-sm opacity-50">Không có ảnh nào được hiển thị</div>}
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 border-t border-border">
+                            <div className="text-sm text-muted-foreground pb-2">Đã chọn {manageSelectedIds.length} ảnh</div>
+                            <div className="flex gap-2">
+                                <Button variant="outline" onClick={() => setManageModalOpen(false)}>
+                                    Hủy
+                                </Button>
+                                <Button onClick={handleConfirmManage} disabled={isUploading}>
+                                    Cập nhật Biên nhận
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
         </>
-      )}
-    </>
-  );
+    );
 }

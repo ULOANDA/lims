@@ -25,6 +25,9 @@ export interface Receipt extends BaseEntity {
     senderInfo?: Record<string, any>;
     conditionCheck?: Record<string, any>;
     reportConfig?: ReportConfig;
+    receptionistId?: string;
+    isBlindCoded?: boolean;
+    receiptReceivedImageFileIds?: string[] | null;
 }
 
 export interface Sample extends BaseEntity {
@@ -46,6 +49,9 @@ export interface Sample extends BaseEntity {
     sampleIsReference?: boolean;
     samplingInfo?: Record<string, any>;
     physicalState?: string;
+    parentSampleId?: string;
+    custodyLog?: Record<string, any>[];
+    retentionServiceFee?: number;
 }
 
 export interface Analysis extends BaseEntity {
@@ -79,6 +85,11 @@ export interface Analysis extends BaseEntity {
         fileId: string;
         url: string;
     };
+    analysisDeadline?: string;
+    rawInputData?: Record<string, any>;
+    resultHistory?: Record<string, any>[];
+    consumablesUsed?: Record<string, any>[];
+    retestReason?: string;
 }
 
 export interface Equipment extends BaseEntity {

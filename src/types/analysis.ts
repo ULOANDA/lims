@@ -1,164 +1,162 @@
 export type IsoDateString = string;
 
 export type IdentitySnapshot = {
-  identityId: string;
-  identityName: string;
-  alias?: string | null;
+    identityId: string;
+    identityName: string;
+    alias?: string | null;
 };
 
-export type AnalysisStatusDb =
-  | "Pending"
-  | "Testing"
-  | "DataEntered"
-  | "TechReview"
-  | "Approved"
-  | "ReTest"
-  | "Cancelled";
+export type AnalysisStatusDb = "Pending" | "Testing" | "DataEntered" | "TechReview" | "Approved" | "ReTest" | "Cancelled";
 
 export type AnalysisResultStatusDb = "Pass" | "Fail" | "NotEvaluated";
 
 export type AnalysisListItem = {
-  analysisId: string;
-  sampleId: string;
-  parameterName: string | null;
-  analysisStatus: AnalysisStatusDb;
-  analysisResultStatus: AnalysisResultStatusDb | null;
-  createdAt: string;
+    analysisId: string;
+    sampleId: string;
+    parameterName: string | null;
+    analysisStatus: AnalysisStatusDb;
+    analysisResultStatus: AnalysisResultStatusDb | null;
+    createdAt: string;
 
-  matrixId?: string | null;
-  parameterId?: string | null;
-  analysisResult?: string | number | null;
-  analysisCompletedAt?: string | null;
-  technician?: unknown | null;
-  createdBy?: unknown;
+    matrixId?: string | null;
+    parameterId?: string | null;
+    analysisResult?: string | number | null;
+    analysisCompletedAt?: string | null;
+    technician?: unknown | null;
+    createdBy?: unknown;
 };
 
 export type AnalysisDetail = {
-  analysisId: string;
-  sampleId: string;
+    analysisId: string;
+    sampleId: string;
 
-  matrixId: string | null;
-  parameterId: string | null;
-  parameterName: string | null;
+    matrixId: string | null;
+    parameterId: string | null;
+    parameterName: string | null;
 
-  analysisStatus: AnalysisStatusDb;
+    analysisStatus: AnalysisStatusDb;
 
-  analysisResult: string | null;
-  analysisResultStatus: AnalysisResultStatusDb | null;
+    analysisResult: string | null;
+    analysisResultStatus: AnalysisResultStatusDb | null;
 
-  analysisCompletedAt: IsoDateString | null;
+    analysisCompletedAt: IsoDateString | null;
+    analysisDeadline?: IsoDateString | null;
+    rawInputData?: Record<string, unknown> | null;
+    resultHistory?: Record<string, unknown>[] | null;
+    consumablesUsed?: Record<string, unknown>[] | null;
+    retestReason?: string | null;
 
-  technician: IdentitySnapshot | null;
+    technician: IdentitySnapshot | null;
 
-  createdAt: IsoDateString;
-  createdBy: IdentitySnapshot;
+    createdAt: IsoDateString;
+    createdBy: IdentitySnapshot;
 };
 
 export type AnalysesGetListBody = {
-  page?: number;
-  itemsPerPage?: number;
+    page?: number;
+    itemsPerPage?: number;
 
-  analysisId?: string;
-  sampleId?: string;
-  matrixId?: string;
-  parameterId?: string;
-  parameterName?: string | null;
-  analysisStatus?: AnalysisStatusDb;
-  analysisResultStatus?: AnalysisResultStatusDb;
+    analysisId?: string;
+    sampleId?: string;
+    matrixId?: string;
+    parameterId?: string;
+    parameterName?: string | null;
+    analysisStatus?: AnalysisStatusDb;
+    analysisResultStatus?: AnalysisResultStatusDb;
 
-  search?: string | null;
-  filters?: Record<string, unknown>;
+    search?: string | null;
+    filters?: Record<string, unknown>;
 
-  [key: string]: unknown;
+    [key: string]: unknown;
 };
 
 export type AnalysesCreateBody = {
-  sampleId: string;
+    sampleId: string;
 
-  matrixId?: string | null;
-  parameterId?: string | null;
-  parameterName?: string | null;
+    matrixId?: string | null;
+    parameterId?: string | null;
+    parameterName?: string | null;
 
-  analysisStatus: AnalysisStatusDb;
+    analysisStatus: AnalysisStatusDb;
 
-  analysisResult?: string | null;
-  analysisResultStatus?: AnalysisResultStatusDb | null;
+    analysisResult?: string | null;
+    analysisResultStatus?: AnalysisResultStatusDb | null;
 
-  analysisCompletedAt?: IsoDateString | null;
+    analysisCompletedAt?: IsoDateString | null;
 
-  technicianId?: string | null;
-  technicianIds?: string[] | null;
-  equipmentId?: string | null;
+    technicianId?: string | null;
+    technicianIds?: string[] | null;
+    equipmentId?: string | null;
 
-  analysisStartedAt?: IsoDateString | null;
-  analysisUncertainty?: string | null;
+    analysisStartedAt?: IsoDateString | null;
+    analysisUncertainty?: string | null;
 
-  analysisMethodLOD?: string | null;
-  analysisMethodLOQ?: string | null;
-  analysisUnit?: string | null;
+    analysisMethodLOD?: string | null;
+    analysisMethodLOQ?: string | null;
+    analysisUnit?: string | null;
 
-  handoverInfo?: unknown[] | null;
-  analysisReportDisplay?: Record<string, string | undefined> | null;
+    handoverInfo?: unknown[] | null;
+    analysisReportDisplay?: Record<string, string | undefined> | null;
 
-  analysisLocation?: string | null;
-  protocolCode?: string | null;
+    analysisLocation?: string | null;
+    protocolCode?: string | null;
 
-  qaReview?: Record<string, unknown> | null;
-  rawData?: Record<string, unknown> | null;
+    qaReview?: Record<string, unknown> | null;
+    rawData?: Record<string, unknown> | null;
 
-  analysisNotes?: string | null;
+    analysisNotes?: string | null;
 };
 
 export type AnalysesUpdateBody = {
-  analysisId: string;
+    analysisId: string;
 
-  sampleId?: string;
-  matrixId?: string | null;
-  parameterId?: string | null;
-  parameterName?: string | null;
+    sampleId?: string;
+    matrixId?: string | null;
+    parameterId?: string | null;
+    parameterName?: string | null;
 
-  analysisStatus?: AnalysisStatusDb;
-  analysisResult?: string | null;
-  analysisResultStatus?: AnalysisResultStatusDb | null;
-  analysisCompletedAt?: IsoDateString | null;
+    analysisStatus?: AnalysisStatusDb;
+    analysisResult?: string | null;
+    analysisResultStatus?: AnalysisResultStatusDb | null;
+    analysisCompletedAt?: IsoDateString | null;
 
-  technicianId?: string | null;
-  technicianIds?: string[] | null;
-  equipmentId?: string | null;
+    technicianId?: string | null;
+    technicianIds?: string[] | null;
+    equipmentId?: string | null;
 
-  analysisStartedAt?: IsoDateString | null;
-  analysisUncertainty?: string | null;
+    analysisStartedAt?: IsoDateString | null;
+    analysisUncertainty?: string | null;
 
-  analysisMethodLOD?: string | null;
-  analysisMethodLOQ?: string | null;
-  analysisUnit?: string | null;
+    analysisMethodLOD?: string | null;
+    analysisMethodLOQ?: string | null;
+    analysisUnit?: string | null;
 
-  handoverInfo?: unknown[] | null;
-  analysisReportDisplay?: Record<string, string | undefined> | null;
+    handoverInfo?: unknown[] | null;
+    analysisReportDisplay?: Record<string, string | undefined> | null;
 
-  analysisLocation?: string | null;
-  protocolCode?: string | null;
+    analysisLocation?: string | null;
+    protocolCode?: string | null;
 
-  qaReview?: Record<string, unknown> | null;
-  rawData?: Record<string, unknown> | null;
+    qaReview?: Record<string, unknown> | null;
+    rawData?: Record<string, unknown> | null;
 
-  analysisNotes?: string | null;
-  createdAt?: IsoDateString;
+    analysisNotes?: string | null;
+    createdAt?: IsoDateString;
 };
 
 export type AnalysesDeleteBody = {
-  analysisId: string;
+    analysisId: string;
 };
 
 export type AnalysesDeleteResult = {
-  analysisId: string;
-  deletedAt: IsoDateString;
-  deletedBy: IdentitySnapshot;
+    analysisId: string;
+    deletedAt: IsoDateString;
+    deletedBy: IdentitySnapshot;
 };
 
 export type ListMeta = {
-  page: number;
-  itemsPerPage: number;
-  total: number;
-  totalPages: number;
+    page: number;
+    itemsPerPage: number;
+    total: number;
+    totalPages: number;
 };

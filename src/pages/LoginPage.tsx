@@ -3,11 +3,13 @@ import { LogIn } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext"; // Ensure this path exists or adjustment needed
 import { useNavigate, useSearchParams } from "react-router-dom";
 import LogoFull from "@/assets/LOGO-FULL.png";
+import { useTranslation } from "react-i18next";
 
 export function LoginPage() {
     const { login } = useAuth();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const { t } = useTranslation();
 
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -18,31 +20,31 @@ export function LoginPage() {
     useEffect(() => {
         const reason = searchParams.get("reason");
         if (reason === "401") {
-            setError("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.");
+            setError(String(t("auth.login.errors.expired", { defaultValue: "Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại." })));
         }
-    }, [searchParams]);
+    }, [searchParams, t]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
 
         if (!username || !password) {
-            setError("Vui lòng nhập tên đăng nhập và mật khẩu");
+            setError(String(t("auth.login.errors.empty", { defaultValue: "Vui lòng nhập tên đăng nhập và mật khẩu" })));
             return;
         }
 
         setIsLoading(true);
         try {
             const ok = await login(username, password);
-      
+
             if (ok) {
-              navigate("/reception", { replace: true });
+                navigate("/reception", { replace: true });
             } else {
-              setError("Tên đăng nhập hoặc mật khẩu không đúng.");
+                setError(String(t("auth.login.errors.invalid", { defaultValue: "Tên đăng nhập hoặc mật khẩu không đúng." })));
             }
-          } finally {
+        } finally {
             setIsLoading(false);
-          }
+        }
     };
 
     return (
@@ -55,12 +57,12 @@ export function LoginPage() {
 
                 {/* Login Card */}
                 <div className="bg-card rounded-lg shadow-md p-8 border border-border">
-                    <h2 className="text-2xl font-bold mb-2 text-center text-foreground">Đăng nhập hệ thống</h2>
+                    <h2 className="text-2xl font-bold mb-2 text-center text-foreground">{String(t("auth.login.title", { defaultValue: "Đăng nhập hệ thống" }))}</h2>
                     <p className="text-center text-muted-foreground text-sm mb-6">Laboratory Information Management System</p>
 
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div>
-                            <label className="text-sm font-medium block mb-2 text-foreground">Tên đăng nhập</label>
+                            <label className="text-sm font-medium block mb-2 text-foreground">{String(t("auth.login.username", { defaultValue: "Tên đăng nhập" }))}</label>
                             <input
                                 type="text"
                                 value={username}
@@ -72,7 +74,7 @@ export function LoginPage() {
                         </div>
 
                         <div>
-                            <label className="text-sm font-medium block mb-2 text-foreground">Mật khẩu</label>
+                            <label className="text-sm font-medium block mb-2 text-foreground">{String(t("auth.login.password", { defaultValue: "Mật khẩu" }))}</label>
                             <input
                                 type="password"
                                 value={password}
@@ -96,7 +98,7 @@ export function LoginPage() {
                             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 rounded flex items-center justify-center gap-2 transition-colors text-sm font-semibold disabled:opacity-50"
                         >
                             <LogIn className="w-4 h-4" />
-                            {isLoading ? "Đang xử lý..." : "Đăng nhập"}
+                            {isLoading ? String(t("auth.login.processing", { defaultValue: "Đang xử lý..." })) : String(t("auth.login.submit", { defaultValue: "Đăng nhập" }))}
                         </button>
                     </form>
                 </div>

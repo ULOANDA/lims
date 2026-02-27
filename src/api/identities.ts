@@ -7,479 +7,418 @@ export type IdentityStatus = "active" | "inactive" | "blocked" | "deleted";
 export type IdentityRoles = Record<string, boolean>;
 
 export type IdentityActor = {
-  identityId: string;
-  identityName: string;
-  alias: string;
+    identityId: string;
+    identityName: string;
+    alias: string;
 };
 
 export type IdentityListItem = {
-  identityId: string;
-  email: string;
-  identityName: string;
-  alias: string | null;
-  roles: IdentityRoles;
-  identityStatus: IdentityStatus;
-  createdAt: string;
+    identityId: string;
+    email: string;
+    identityName: string;
+    alias: string | null;
+    roles: IdentityRoles;
+    identityStatus: IdentityStatus;
+    createdAt: string;
 
-  createdBy?: IdentityActor;
-  createdById?: string | null;
+    createdBy?: IdentityActor;
+    createdById?: string | null;
 
-  modifiedAt?: string | null;
-  modifiedBy?: IdentityActor;
-  modifiedById?: string | null;
+    modifiedAt?: string | null;
+    modifiedBy?: IdentityActor;
+    modifiedById?: string | null;
 
-  deletedAt?: string | null;
+    deletedAt?: string | null;
 
-  entity?: { type?: string };
+    entity?: { type?: string };
 };
 
 export type IdentityDetail = IdentityListItem & {
-  permissions: Record<string, unknown>;
+    permissions: Record<string, unknown>;
 };
 
 export type IdentitiesListQuery = {
-  page?: number;
-  itemsPerPage?: number;
-  sortColumn?: string;
-  sortDirection?: "ASC" | "DESC";
-  search?: string | null;
-  entityType?: string | null;
+    page?: number;
+    itemsPerPage?: number;
+    sortColumn?: string;
+    sortDirection?: "ASC" | "DESC";
+    search?: string | null;
+    entityType?: string | null;
 };
 
 export type IdentityCreateBody = {
-  email: string;
-  identityName: string;
-  alias: string;
-  password: string;
-  roles: IdentityRoles;
-  permissions: Record<string, unknown>;
-  identityStatus: IdentityStatus;
+    email: string;
+    identityName: string;
+    alias: string;
+    password: string;
+    roles: IdentityRoles;
+    permissions: Record<string, unknown>;
+    identityStatus: IdentityStatus;
 };
 
 export type IdentityUpdateBody = {
-  identityId: string;
-  identityName?: string;
-  roles?: IdentityRoles;
-  permissions?: Record<string, unknown>;
-  identityStatus?: IdentityStatus;
+    identityId: string;
+    identityName?: string;
+    roles?: IdentityRoles;
+    permissions?: Record<string, unknown>;
+    identityStatus?: IdentityStatus;
 };
 
-export type IdentitiesFilterFrom =
-  | "identityId"
-  | "email"
-  | "identityName"
-  | "alias"
-  | "identityStatus"
-  | "entityType";
+export type IdentitiesFilterFrom = "identityId" | "email" | "identityName" | "alias" | "identityStatus" | "entityType";
 
 export type IdentitiesFilterOtherFilter = {
-  filterFrom: IdentitiesFilterFrom;
-  filterValues: Array<string | number>;
+    filterFrom: IdentitiesFilterFrom;
+    filterValues: Array<string | number>;
 };
 
 export type IdentitiesFilterBody = {
-  filterFrom: IdentitiesFilterFrom;
-  textFilter: string | null;
-  otherFilters: IdentitiesFilterOtherFilter[];
+    filterFrom: IdentitiesFilterFrom;
+    textFilter: string | null;
+    otherFilters: IdentitiesFilterOtherFilter[];
 
-  page?: number;
-  itemsPerPage?: number;
+    page?: number;
+    itemsPerPage?: number;
 };
 
 export type IdentitiesFilterResult = {
-  data: IdentityListItem[];
-  meta: ApiMeta | null;
+    data: IdentityListItem[];
+    meta: ApiMeta | null;
 };
 
 function isObject(x: unknown): x is Record<string, unknown> {
-  return typeof x === "object" && x !== null;
+    return typeof x === "object" && x !== null;
 }
 
 function ok<T>(data: T, meta: ApiMeta | null = null): ApiResponse<T> {
-  return { success: true, statusCode: 200, data, meta, error: null };
+    return { success: true, statusCode: 200, data, meta, error: null };
 }
 
-function fail(
-  code: string,
-  message: string,
-  statusCode = 500
-): ApiResponse<never> {
-  return {
-    success: false,
-    statusCode,
-    data: undefined,
-    meta: null,
-    error: { code, message },
-  };
+function fail(code: string, message: string, statusCode = 500): ApiResponse<never> {
+    return {
+        success: false,
+        statusCode,
+        data: undefined,
+        meta: null,
+        error: { code, message },
+    };
 }
 
-export function isApiSuccess<T>(
-  res: ApiResponse<T>
-): res is ApiResponse<T> & { success: true; data: T } {
-  return res.success === true && typeof res.data !== "undefined";
+export function isApiSuccess<T>(res: ApiResponse<T>): res is ApiResponse<T> & { success: true; data: T } {
+    return res.success === true && typeof res.data !== "undefined";
 }
 
 function assertSuccess<T>(res: ApiResponse<T>): T {
-  if (!res.success) throw new Error(res.error?.message ?? "Unknown API error");
-  return res.data as T;
+    if ("success" in res && res.success === false) throw new Error(res.error?.message ?? "Unknown API error");
+    return res.data as T;
 }
 
 function stableKey(value: unknown): string {
-  const seen = new WeakSet<object>();
-  const sorter = (_k: string, v: unknown) => {
-    if (v && typeof v === "object") {
-      const obj = v as object;
-      if (seen.has(obj)) return undefined;
-      seen.add(obj);
+    const seen = new WeakSet<object>();
+    const sorter = (_k: string, v: unknown) => {
+        if (v && typeof v === "object") {
+            const obj = v as object;
+            if (seen.has(obj)) return undefined;
+            seen.add(obj);
 
-      if (Array.isArray(v)) return v.map((x) => x);
+            if (Array.isArray(v)) return v.map((x) => x);
 
-      return Object.fromEntries(
-        Object.entries(v as Record<string, unknown>).sort(([a], [b]) =>
-          a.localeCompare(b)
-        )
-      );
-    }
-    return v;
-  };
-  return JSON.stringify(value, sorter);
+            return Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)));
+        }
+        return v;
+    };
+    return JSON.stringify(value, sorter);
 }
 
 function isApiResponseShape(x: unknown): x is ApiResponse<unknown> {
-  if (!isObject(x)) return false;
-  return typeof x.success === "boolean" && typeof x.statusCode === "number";
+    if (!isObject(x)) return false;
+    return typeof x.success === "boolean" && typeof x.statusCode === "number";
 }
 
 type RawListResponse = {
-  data: unknown;
-  pagination: unknown;
+    data: unknown;
+    pagination: unknown;
 };
 
 function isRawListResponse(x: unknown): x is RawListResponse {
-  return isObject(x) && "data" in x && "pagination" in x;
+    return isObject(x) && "data" in x && "pagination" in x;
 }
 
 function isApiMeta(x: unknown): x is ApiMeta {
-  if (!isObject(x)) return false;
-  return (
-    typeof x.page === "number" &&
-    typeof x.itemsPerPage === "number" &&
-    typeof x.totalPages === "number"
-  );
+    if (!isObject(x)) return false;
+    return typeof x.page === "number" && typeof x.itemsPerPage === "number" && typeof x.totalPages === "number";
 }
 
-
 function sanitizeRoles(x: unknown): IdentityRoles {
-  if (Array.isArray(x)) {
-    const out: Record<string, boolean> = {};
-    for (const r of x) {
-      if (typeof r === "string" && r.trim().length > 0) out[r] = true;
+    if (Array.isArray(x)) {
+        const out: Record<string, boolean> = {};
+        for (const r of x) {
+            if (typeof r === "string" && r.trim().length > 0) out[r] = true;
+        }
+        return out;
     }
-    return out;
-  }
 
-  if (!isObject(x)) return {};
-  const out: Record<string, boolean> = {};
-  for (const [k, v] of Object.entries(x)) out[k] = Boolean(v);
-  return out;
+    if (!isObject(x)) return {};
+    const out: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(x)) out[k] = Boolean(v);
+    return out;
 }
 
 function sanitizeStatus(x: unknown): IdentityStatus {
-  if (
-    x === "active" ||
-    x === "inactive" ||
-    x === "blocked" ||
-    x === "deleted"
-  )
-    return x;
-  return "inactive";
+    if (x === "active" || x === "inactive" || x === "blocked" || x === "deleted") return x;
+    return "inactive";
 }
 
 function sanitizeListItem(raw: unknown): IdentityListItem | null {
-  if (!isObject(raw)) return null;
+    if (!isObject(raw)) return null;
 
-  const identityId = raw.identityId;
-  const email = raw.email;
-  const identityName = raw.identityName;
+    const identityId = raw.identityId;
+    const email = raw.email;
+    const identityName = raw.identityName;
 
-  if (typeof identityId !== "string") return null;
-  if (typeof email !== "string") return null;
-  if (typeof identityName !== "string") return null;
+    if (typeof identityId !== "string") return null;
+    if (typeof email !== "string") return null;
+    if (typeof identityName !== "string") return null;
 
-  const alias = typeof raw.alias === "string" ? raw.alias : null;
-  const createdAt = typeof raw.createdAt === "string" ? raw.createdAt : "";
+    const alias = typeof raw.alias === "string" ? raw.alias : null;
+    const createdAt = typeof raw.createdAt === "string" ? raw.createdAt : "";
 
-  return {
-    identityId,
-    email,
-    identityName,
-    alias,
-    roles: sanitizeRoles(raw.roles),
-    identityStatus: sanitizeStatus(raw.identityStatus),
-    createdAt,
+    return {
+        identityId,
+        email,
+        identityName,
+        alias,
+        roles: sanitizeRoles(raw.roles),
+        identityStatus: sanitizeStatus(raw.identityStatus),
+        createdAt,
 
-    createdById: typeof raw.createdById === "string" ? raw.createdById : null,
-    modifiedAt: typeof raw.modifiedAt === "string" ? raw.modifiedAt : null,
-    modifiedById:
-      typeof raw.modifiedById === "string" ? raw.modifiedById : null,
-    deletedAt: typeof raw.deletedAt === "string" ? raw.deletedAt : null,
+        createdById: typeof raw.createdById === "string" ? raw.createdById : null,
+        modifiedAt: typeof raw.modifiedAt === "string" ? raw.modifiedAt : null,
+        modifiedById: typeof raw.modifiedById === "string" ? raw.modifiedById : null,
+        deletedAt: typeof raw.deletedAt === "string" ? raw.deletedAt : null,
 
-    entity: isObject(raw.entity)
-      ? {
-          type:
-            typeof raw.entity.type === "string" ? raw.entity.type : undefined,
-        }
-      : undefined,
-  };
+        entity: isObject(raw.entity)
+            ? {
+                  type: typeof raw.entity.type === "string" ? raw.entity.type : undefined,
+              }
+            : undefined,
+    };
 }
 
 function sanitizeDetail(raw: unknown): IdentityDetail | null {
-  const base = sanitizeListItem(raw);
-  if (!base) return null;
+    const base = sanitizeListItem(raw);
+    if (!base) return null;
 
-  const r = raw as Record<string, unknown>;
-  return {
-    ...base,
-    permissions: isObject(r.permissions) ? r.permissions : {},
-  };
+    const r = raw as Record<string, unknown>;
+    return {
+        ...base,
+        permissions: isObject(r.permissions) ? r.permissions : {},
+    };
 }
 
-export async function identitiesGetList(input: {
-  query: IdentitiesListQuery;
-}): Promise<ApiResponse<IdentityListItem[]>> {
-  const raw: unknown = await api.getRaw<unknown, IdentitiesListQuery>(
-    "/v2/identities/get/list",
-    {
-      query: input.query,
-      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
-    }
-  );
+export async function identitiesGetList(input: { query: IdentitiesListQuery }): Promise<ApiResponse<IdentityListItem[]>> {
+    const raw: unknown = await api.getRaw<unknown, IdentitiesListQuery>("/v2/identities/get/list", {
+        query: input.query,
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+    });
 
-  if (isApiResponseShape(raw)) {
-    const asApi = raw as ApiResponse<unknown>;
+    if (isApiResponseShape(raw)) {
+        const asApi = raw as ApiResponse<unknown>;
 
-    if (asApi.success && Array.isArray(asApi.data)) {
-      const items: IdentityListItem[] = [];
-      for (const it of asApi.data) {
-        const s = sanitizeListItem(it);
-        if (s) items.push(s);
-      }
-      return ok(items, (asApi.meta ?? null) as ApiMeta | null);
+        if (asApi.success && Array.isArray(asApi.data)) {
+            const items: IdentityListItem[] = [];
+            for (const it of asApi.data) {
+                const s = sanitizeListItem(it);
+                if (s) items.push(s);
+            }
+            return ok(items, (asApi.meta ?? null) as ApiMeta | null);
+        }
+
+        return asApi as ApiResponse<IdentityListItem[]>;
     }
 
-    return asApi as ApiResponse<IdentityListItem[]>;
-  }
+    if (isRawListResponse(raw)) {
+        const dataUnknown = (raw as { data: unknown }).data;
+        const paginationUnknown = (raw as { pagination: unknown }).pagination;
 
-  if (isRawListResponse(raw)) {
-    const dataUnknown = (raw as { data: unknown }).data;
-    const paginationUnknown = (raw as { pagination: unknown }).pagination;
+        if (!Array.isArray(dataUnknown)) {
+            return fail("BAD_RESPONSE_SHAPE", "identities list: data is not an array");
+        }
+        if (!isApiMeta(paginationUnknown)) {
+            return fail("BAD_RESPONSE_SHAPE", "identities list: pagination is invalid");
+        }
 
-    if (!Array.isArray(dataUnknown)) {
-      return fail("BAD_RESPONSE_SHAPE", "identities list: data is not an array");
-    }
-    if (!isApiMeta(paginationUnknown)) {
-      return fail(
-        "BAD_RESPONSE_SHAPE",
-        "identities list: pagination is invalid"
-      );
-    }
+        const items: IdentityListItem[] = [];
+        for (const it of dataUnknown) {
+            const s = sanitizeListItem(it);
+            if (s) items.push(s);
+        }
 
-    const items: IdentityListItem[] = [];
-    for (const it of dataUnknown) {
-      const s = sanitizeListItem(it);
-      if (s) items.push(s);
+        return ok(items, paginationUnknown);
     }
 
-    return ok(items, paginationUnknown);
-  }
-
-  return fail("BAD_RESPONSE_SHAPE", "Unexpected response shape (identities list)");
+    return fail("BAD_RESPONSE_SHAPE", "Unexpected response shape (identities list)");
 }
 
-export async function identitiesGetDetail(input: {
-  query: { identityId: string };
-}): Promise<ApiResponse<IdentityDetail>> {
-  const raw: unknown = await api.getRaw<unknown, { identityId: string }>(
-    "/v2/identities/get/detail",
-    {
-      query: input.query,
-      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+export async function identitiesGetDetail(input: { query: { identityId: string } }): Promise<ApiResponse<IdentityDetail>> {
+    const raw: unknown = await api.getRaw<unknown, { identityId: string }>("/v2/identities/get/detail", {
+        query: input.query,
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+    });
+
+    if (isApiResponseShape(raw)) {
+        const asApi = raw as ApiResponse<unknown>;
+        if (asApi.success) {
+            const d1 = sanitizeDetail(asApi.data);
+            if (d1) return ok(d1, (asApi.meta ?? null) as ApiMeta | null);
+        }
+        return asApi as ApiResponse<IdentityDetail>;
     }
-  );
 
-  if (isApiResponseShape(raw)) {
-    const asApi = raw as ApiResponse<unknown>;
-    if (asApi.success) {
-      const d1 = sanitizeDetail(asApi.data);
-      if (d1) return ok(d1, (asApi.meta ?? null) as ApiMeta | null);
+    const d1 = sanitizeDetail(raw);
+    if (d1) return ok(d1);
+
+    if (isObject(raw)) {
+        const maybeData = (raw as { data?: unknown }).data;
+        const d2 = sanitizeDetail(maybeData);
+        if (d2) return ok(d2);
     }
-    return asApi as ApiResponse<IdentityDetail>;
-  }
 
-  const d1 = sanitizeDetail(raw);
-  if (d1) return ok(d1);
-
-  if (isObject(raw)) {
-    const maybeData = (raw as { data?: unknown }).data;
-    const d2 = sanitizeDetail(maybeData);
-    if (d2) return ok(d2);
-  }
-
-  return fail("BAD_RESPONSE_SHAPE", "Unexpected response shape (identity detail)");
+    return fail("BAD_RESPONSE_SHAPE", "Unexpected response shape (identity detail)");
 }
 
-export async function identitiesCreate(input: {
-  body: IdentityCreateBody;
-}): Promise<ApiResponse<IdentityDetail>> {
-  const res = await api.post<IdentityDetail, IdentityCreateBody>(
-    "/v2/identities/create",
-    { body: input.body }
-  );
+export async function identitiesCreate(input: { body: IdentityCreateBody }): Promise<ApiResponse<IdentityDetail>> {
+    const res = await api.post<IdentityDetail, IdentityCreateBody>("/v2/identities/create", { body: input.body });
 
-  if (res.success) {
-    const d = sanitizeDetail(res.data);
-    if (d) return ok(d, res.meta ?? null);
-  }
-  return res;
+    if (res.success) {
+        const d = sanitizeDetail(res.data);
+        if (d) return ok(d, res.meta ?? null);
+    }
+    return res;
 }
 
-export async function identitiesUpdate(input: {
-  body: IdentityUpdateBody;
-}): Promise<ApiResponse<IdentityDetail>> {
-  const res = await api.post<IdentityDetail, IdentityUpdateBody>(
-    "/v2/identities/update",
-    { body: input.body }
-  );
+export async function identitiesUpdate(input: { body: IdentityUpdateBody }): Promise<ApiResponse<IdentityDetail>> {
+    const res = await api.post<IdentityDetail, IdentityUpdateBody>("/v2/identities/update", { body: input.body });
 
-  if (res.success) {
-    const d = sanitizeDetail(res.data);
-    if (d) return ok(d, res.meta ?? null);
-  }
-  return res;
+    if (res.success) {
+        const d = sanitizeDetail(res.data);
+        if (d) return ok(d, res.meta ?? null);
+    }
+    return res;
 }
 
-export async function identitiesDelete(input: {
-  body: { identityId: string };
-}): Promise<ApiResponse<{ identityId: string; deletedAt?: string }>> {
-  return api.post<{ identityId: string; deletedAt?: string }, { identityId: string }>(
-    "/v2/identities/delete",
-    { body: input.body }
-  );
+export async function identitiesDelete(input: { body: { identityId: string } }): Promise<ApiResponse<{ identityId: string; deletedAt?: string }>> {
+    return api.post<{ identityId: string; deletedAt?: string }, { identityId: string }>("/v2/identities/delete", { body: input.body });
 }
 
-export async function identitiesFilter(input: {
-  body: IdentitiesFilterBody;
-}): Promise<ApiResponse<IdentityListItem[]>> {
-  const raw: unknown = await api.postRaw<unknown, IdentitiesFilterBody>(
-    "/v2/identities/filter",
-    { body: input.body }
-  );
+export async function identitiesAddRole(input: { body: { identityId: string; roleCode: string } }): Promise<ApiResponse<any>> {
+    return api.post("/v2/identities/update/add-role", { body: input.body });
+}
 
-  if (isApiResponseShape(raw)) {
-    const asApi = raw as ApiResponse<unknown>;
+export async function identitiesRemoveRole(input: { body: { identityId: string; roleCode: string } }): Promise<ApiResponse<any>> {
+    return api.post("/v2/identities/update/remove-role", { body: input.body });
+}
 
-    if (asApi.success && Array.isArray(asApi.data)) {
-      const items: IdentityListItem[] = [];
-      for (const it of asApi.data) {
-        const s = sanitizeListItem(it);
-        if (s) items.push(s);
-      }
-      return ok(items, (asApi.meta ?? null) as ApiMeta | null);
+export async function identitiesUpdatePolicy(input: { body: { identityId: string; policyCode: string; status: string } }): Promise<ApiResponse<any>> {
+    return api.post("/v2/identities/update/update-policy", { body: input.body });
+}
+
+export async function identitiesFilter(input: { body: IdentitiesFilterBody }): Promise<ApiResponse<IdentityListItem[]>> {
+    const raw: unknown = await api.postRaw<unknown, IdentitiesFilterBody>("/v2/identities/filter", { body: input.body });
+
+    if (isApiResponseShape(raw)) {
+        const asApi = raw as ApiResponse<unknown>;
+
+        if (asApi.success && Array.isArray(asApi.data)) {
+            const items: IdentityListItem[] = [];
+            for (const it of asApi.data) {
+                const s = sanitizeListItem(it);
+                if (s) items.push(s);
+            }
+            return ok(items, (asApi.meta ?? null) as ApiMeta | null);
+        }
+
+        return asApi as ApiResponse<IdentityListItem[]>;
     }
 
-    return asApi as ApiResponse<IdentityListItem[]>;
-  }
+    if (isRawListResponse(raw)) {
+        const dataUnknown = (raw as { data: unknown }).data;
+        const paginationUnknown = (raw as { pagination: unknown }).pagination;
 
-  if (isRawListResponse(raw)) {
-    const dataUnknown = (raw as { data: unknown }).data;
-    const paginationUnknown = (raw as { pagination: unknown }).pagination;
+        if (!Array.isArray(dataUnknown)) {
+            return fail("BAD_RESPONSE_SHAPE", "identities filter: data is not an array");
+        }
+        if (!isApiMeta(paginationUnknown)) {
+            return fail("BAD_RESPONSE_SHAPE", "identities filter: pagination is invalid");
+        }
 
-    if (!Array.isArray(dataUnknown)) {
-      return fail("BAD_RESPONSE_SHAPE", "identities filter: data is not an array");
+        const items: IdentityListItem[] = [];
+        for (const it of dataUnknown) {
+            const s = sanitizeListItem(it);
+            if (s) items.push(s);
+        }
+
+        return ok(items, paginationUnknown);
     }
-    if (!isApiMeta(paginationUnknown)) {
-      return fail("BAD_RESPONSE_SHAPE", "identities filter: pagination is invalid");
-    }
 
-    const items: IdentityListItem[] = [];
-    for (const it of dataUnknown) {
-      const s = sanitizeListItem(it);
-      if (s) items.push(s);
-    }
-
-    return ok(items, paginationUnknown);
-  }
-
-  return fail("BAD_RESPONSE_SHAPE", "Unexpected response shape (identities filter)");
+    return fail("BAD_RESPONSE_SHAPE", "Unexpected response shape (identities filter)");
 }
 
 export const identitiesKeys = {
-  all: ["identities"] as const,
+    all: ["identities"] as const,
 
-  list: (q: IdentitiesListQuery) => [...identitiesKeys.all, "list", q] as const,
-  detail: (identityId: string) =>
-    [...identitiesKeys.all, "detail", identityId] as const,
+    list: (q: IdentitiesListQuery) => [...identitiesKeys.all, "list", q] as const,
+    detail: (identityId: string) => [...identitiesKeys.all, "detail", identityId] as const,
 
-  allList: (input: { query: IdentitiesListQuery }) =>
-    [...identitiesKeys.all, "all", stableKey(input)] as const,
+    allList: (input: { query: IdentitiesListQuery }) => [...identitiesKeys.all, "all", stableKey(input)] as const,
 
-  filter: (input: { body: IdentitiesFilterBody }) =>
-    [...identitiesKeys.all, "filter", stableKey(input)] as const,
+    filter: (input: { body: IdentitiesFilterBody }) => [...identitiesKeys.all, "filter", stableKey(input)] as const,
 };
 
-export function useIdentitiesAll(
-  input: { query: IdentitiesListQuery },
-  opts?: { enabled?: boolean }
-) {
-  return useQuery({
-    queryKey: identitiesKeys.allList(input),
-    enabled: opts?.enabled ?? true,
-    placeholderData: keepPreviousData,
-    retry: false,
-    queryFn: async () => {
-      const firstRes = await identitiesGetList({ query: input.query });
+export function useIdentitiesAll(input: { query: IdentitiesListQuery }, opts?: { enabled?: boolean }) {
+    return useQuery({
+        queryKey: identitiesKeys.allList(input),
+        enabled: opts?.enabled ?? true,
+        placeholderData: keepPreviousData,
+        retry: false,
+        queryFn: async () => {
+            const firstRes = await identitiesGetList({ query: input.query });
 
-      if (!firstRes.success) {
-        return { data: [] as IdentityListItem[], meta: firstRes.meta ?? null };
-      }
+            if (!firstRes.success) {
+                return { data: [] as IdentityListItem[], meta: firstRes.meta ?? null };
+            }
 
-      const meta = firstRes.meta ?? null;
-      const totalPages = meta?.totalPages ?? 1;
+            const meta = firstRes.meta ?? null;
+            const totalPages = meta?.totalPages ?? 1;
 
-      const all: IdentityListItem[] = Array.isArray(firstRes.data)
-        ? [...firstRes.data]
-        : [];
+            const all: IdentityListItem[] = Array.isArray(firstRes.data) ? [...firstRes.data] : [];
 
-      for (let p = 2; p <= totalPages; p += 1) {
-        const pageRes = await identitiesGetList({
-          query: { ...input.query, page: p },
-        });
+            for (let p = 2; p <= totalPages; p += 1) {
+                const pageRes = await identitiesGetList({
+                    query: { ...input.query, page: p },
+                });
 
-        if (pageRes.success && Array.isArray(pageRes.data)) {
-          all.push(...pageRes.data);
-        }
-      }
+                if (pageRes.success && Array.isArray(pageRes.data)) {
+                    all.push(...pageRes.data);
+                }
+            }
 
-      return { data: all, meta };
-    },
-  });
+            return { data: all, meta };
+        },
+    });
 }
 
-export function useIdentitiesFilter(
-  input: { body: IdentitiesFilterBody },
-  opts?: { enabled?: boolean }
-) {
-  return useQuery({
-    queryKey: identitiesKeys.filter(input),
-    enabled: opts?.enabled ?? true,
-    placeholderData: keepPreviousData,
-    retry: false,
-    queryFn: async () => {
-      const res = await identitiesFilter(input);
-      return {
-        data: assertSuccess(res),
-        meta: res.meta ?? null,
-      } satisfies IdentitiesFilterResult;
-    },
-  });
+export function useIdentitiesFilter(input: { body: IdentitiesFilterBody }, opts?: { enabled?: boolean }) {
+    return useQuery({
+        queryKey: identitiesKeys.filter(input),
+        enabled: opts?.enabled ?? true,
+        placeholderData: keepPreviousData,
+        retry: false,
+        queryFn: async () => {
+            const res = await identitiesFilter(input);
+            return {
+                data: assertSuccess(res),
+                meta: res.meta ?? null,
+            } satisfies IdentitiesFilterResult;
+        },
+    });
 }

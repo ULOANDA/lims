@@ -83,7 +83,12 @@ export interface Order extends BaseEntity {
     transactions: Transaction[];
     orderUri?: string;
     requestForm?: string; // HTML content
+    totalPaid?: number;
+    invoiceNumbers?: string[];
     receiptId?: string;
+    requestDate?: string;
+    paymentDate?: string;
+    orderNote?: string;
 }
 
 export interface Quote extends BaseEntity {

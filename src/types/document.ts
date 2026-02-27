@@ -10,11 +10,16 @@ export interface FileEntity extends BaseEntity {
     opaiFile?: Record<string, any>;
 }
 
+export type DocumentStatus = "Draft" | "Issued" | "Revised" | "Cancelled";
+
 export interface DocumentEntity extends BaseEntity {
     documentId: string;
+    documentTitle?: string;
     fileId: string;
     refId?: string;
     refType?: "Receipt" | "Order" | string;
+    commonKeys?: string[];
+    documentStatus?: DocumentStatus;
     jsonContent?: Record<string, any>;
 }
 
@@ -25,4 +30,10 @@ export interface Report extends BaseEntity {
     header?: string; // HTML
     content?: string; // HTML
     footer?: string; // HTML
+    reportStatus?: "Draft" | "Issued" | "Revised" | "Cancelled";
+    reportRevision?: number;
+    reportRevisionNote?: string;
+    replacedByReportId?: string;
+    signatures?: Record<string, unknown>[];
+    complaintId?: string;
 }

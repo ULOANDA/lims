@@ -94,12 +94,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             try {
-                const response = await checkSessionStatus({ body: { sessionId } });
-                if (!response.success || response.data?.sessionStatus !== "active") {
+                const response: any = await checkSessionStatus({ body: { sessionId } });
+                const payload = response.data || response;
+
+                if (!payload || payload.sessionStatus !== "active") {
                     console.log("Session invalid or expired, logging out...");
                     logout();
                 } else {
-                    const identity = response.data.identity;
+                    const identity = payload.identity;
                     if (identity) {
                         setUser((_prev) => {
                             const updatedUser: User = {
@@ -127,11 +129,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const login = async (username: string, password: string): Promise<boolean> => {
         try {
-            const response = await apiLogin({ body: { username, password } });
-            if (response.success && response.data) {
-                const identity = response.data.identity;
-                const token = response.data.token;
-                const newSessionId = response.data.sessionId;
+            const response: any = await apiLogin({ body: { username, password } });
+            const payload = response.data || response; // Handle both wrapped and unwrapped APIs
+
+            if (payload && payload.token && payload.identity) {
+                const identity = payload.identity;
+                const token = payload.token;
+                const newSessionId = payload.sessionId;
 
                 // Save Token
                 Cookies.set("authToken", token, { expires: 7 });

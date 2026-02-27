@@ -1,41 +1,41 @@
 import type { ApiResponse } from "@/api/client";
 
 export type ListQuery = {
-  page?: number;
-  itemsPerPage?: number;
-  search?: string;
-  [key: string]: unknown;
+    page?: number;
+    itemsPerPage?: number;
+    search?: string;
+    [key: string]: unknown;
 };
 
 export type SortDirection = "asc" | "desc";
 
 export type SortParams = {
-  sortBy?: string;
-  sortDir?: SortDirection;
+    sortBy?: string;
+    sortDir?: SortDirection;
 };
 
 export type IdParams<K extends string> = { params: Record<K, string> };
 
 export type Pagination = {
-  page: number;
-  itemsPerPage: number;
-  total: number;
-  totalPages: number;
+    page: number;
+    itemsPerPage: number;
+    total: number;
+    totalPages: number;
 };
 
 export type ListResponse<TItem> = {
-  data: TItem[];
-  pagination: Pagination;
+    data: TItem[];
+    pagination: Pagination;
 };
 
 export function assertSuccess<T>(res: ApiResponse<T>): T {
-  if (!res.success) throw new Error(res.error?.message ?? "Unknown error");
-  if (res.data === undefined) throw new Error("Missing data");
-  return res.data;
+    if ("success" in res && res.success === false) throw new Error(res.error?.message ?? "Unknown error");
+    if (res.data === undefined) throw new Error("Missing data");
+    return res.data;
 }
 
 export function assertList<TItem>(res: ListResponse<TItem>): ListResponse<TItem> {
-  if (!res || !Array.isArray(res.data)) throw new Error("Invalid list response shape: missing data[]");
-  if (!res.pagination) throw new Error("Invalid list response shape: missing pagination");
-  return res;
+    if (!res || !Array.isArray(res.data)) throw new Error("Invalid list response shape: missing data[]");
+    if (!res.pagination) throw new Error("Invalid list response shape: missing pagination");
+    return res;
 }

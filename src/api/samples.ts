@@ -1,433 +1,385 @@
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
 import api, { type ApiResponse } from "@/api/client";
-import type {
-  SampleDetail,
-  SampleListItem,
-  SamplesCreateBody,
-  SamplesUpdateBody,
-} from "@/types/sample";
+import type { SampleDetail, SampleListItem, SamplesCreateBody, SamplesUpdateBody } from "@/types/sample";
 
 export type SamplesGetListQuery = {
-  page?: number;
-  itemsPerPage?: number;
+    page?: number;
+    itemsPerPage?: number;
 
-  receiptId?: string;
-  sampleStatus?: string;
+    receiptId?: string;
+    sampleStatus?: string;
 
-  search?: string | null;
+    search?: string | null;
 
-  [key: string]: unknown;
+    [key: string]: unknown;
 };
 
 export type SamplesGetListInput = {
-  query?: SamplesGetListQuery;
-  sort?: Record<string, unknown>;
+    query?: SamplesGetListQuery;
+    sort?: Record<string, unknown>;
 };
 
 const noCacheHeaders = {
-  "Cache-Control": "no-cache, no-store, must-revalidate",
-  Pragma: "no-cache",
-  Expires: "0",
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
 } as const;
 
-export async function samplesGetList(
-  input: SamplesGetListInput = {}
-): Promise<ApiResponse<SampleListItem[]>> {
-  const { query, sort } = input;
+export async function samplesGetList(input: SamplesGetListInput = {}): Promise<ApiResponse<SampleListItem[]>> {
+    const { query, sort } = input;
 
-  return api.get<SampleListItem[]>("/v2/samples/get/list", {
-    query: { ...(query ?? {}), ...(sort ? { sort } : {}) },
-    headers: noCacheHeaders,
-  });
+    return api.get<SampleListItem[]>("/v2/samples/get/list", {
+        query: { ...(query ?? {}), ...(sort ? { sort } : {}) },
+        headers: noCacheHeaders,
+    });
 }
 
 export type SamplesGetFullInput = { sampleId: string };
 
-export async function samplesGetFull(
-  input: SamplesGetFullInput
-): Promise<ApiResponse<SampleDetail>> {
-  return api.get<SampleDetail>("/v2/samples/get/full", {
-    query: input,
-    headers: noCacheHeaders,
-  });
+export async function samplesGetFull(input: SamplesGetFullInput): Promise<ApiResponse<SampleDetail>> {
+    return api.get<SampleDetail>("/v2/samples/get/full", {
+        query: input,
+        headers: noCacheHeaders,
+    });
 }
 
-export async function samplesCreate(
-  body: SamplesCreateBody
-): Promise<ApiResponse<SampleDetail>> {
-  return api.post<SampleDetail, SamplesCreateBody>("/v2/samples/create", {
-    body,
-  });
+export async function samplesGetProcessing(input: SamplesGetListInput = {}): Promise<ApiResponse<SampleListItem[]>> {
+    const { query, sort } = input;
+    return api.get<SampleListItem[]>("/v2/samples/get/processing", {
+        query: { ...(query ?? {}), ...(sort ? { sort } : {}) },
+        headers: noCacheHeaders,
+    });
 }
 
-export async function samplesUpdate(
-  body: SamplesUpdateBody
-): Promise<ApiResponse<SampleDetail>> {
-  return api.post<SampleDetail, SamplesUpdateBody>("/v2/samples/update", {
-    body,
-  });
+export async function samplesCreate(body: SamplesCreateBody): Promise<ApiResponse<SampleDetail>> {
+    return api.post<SampleDetail, SamplesCreateBody>("/v2/samples/create", {
+        body,
+    });
+}
+
+export async function samplesUpdate(body: SamplesUpdateBody): Promise<ApiResponse<SampleDetail>> {
+    return api.post<SampleDetail, SamplesUpdateBody>("/v2/samples/update", {
+        body,
+    });
 }
 
 export type ApiMeta = {
-  page: number;
-  itemsPerPage: number;
+    page: number;
+    itemsPerPage: number;
 
-  totalItems?: number;
-  total?: number;
+    totalItems?: number;
+    total?: number;
 
-  totalPages: number;
-  [k: string]: unknown;
+    totalPages: number;
+    [k: string]: unknown;
 };
 
 export type ListResult<T> = {
-  data: T;
-  meta: ApiMeta | null;
+    data: T;
+    meta: ApiMeta | null;
 };
 
 function assertSuccess<T>(res: ApiResponse<T>): T {
-  if (!res.success) {
-    throw new Error(res.error?.message ?? "Unknown API error");
-  }
-  return res.data as T;
+    // Backend list endpoints return { data, pagination } without `success`
+    // Mutation endpoints return { success, statusCode, data, meta, error }
+    if ("success" in res && res.success === false) {
+        throw new Error(res.error?.message ?? "Unknown API error");
+    }
+    return res.data as T;
 }
 
 function assertSuccessWithMeta<T>(res: ApiResponse<T>): ListResult<T> {
-  if (!res.success) throw new Error(res.error?.message ?? "Unknown API error");
+    if ("success" in res && res.success === false) {
+        throw new Error(res.error?.message ?? "Unknown API error");
+    }
 
-  const meta = (res.meta ?? null) as ApiMeta | null;
+    const rawAny = res as unknown as Record<string, unknown>;
+    const meta = (res.meta ?? rawAny.pagination ?? null) as ApiMeta | null;
 
-  const normalizedMeta =
-    meta && typeof meta === "object"
-      ? {
-          ...meta,
-          total:
-            typeof meta.total === "number"
-              ? meta.total
-              : typeof meta.totalItems === "number"
-              ? meta.totalItems
-              : 0,
-        }
-      : null;
+    const normalizedMeta =
+        meta && typeof meta === "object"
+            ? {
+                  ...meta,
+                  page: typeof meta.page === "string" ? parseInt(meta.page as unknown as string, 10) : meta.page,
+                  total: typeof meta.total === "number" ? meta.total : typeof meta.totalItems === "number" ? meta.totalItems : 0,
+              }
+            : null;
 
-  return { data: res.data as T, meta: normalizedMeta };
+    return { data: res.data as T, meta: normalizedMeta };
 }
 
 function stableKey(value: unknown): string {
-  const seen = new WeakSet<object>();
+    const seen = new WeakSet<object>();
 
-  const sorter = (_k: string, v: unknown) => {
-    if (v && typeof v === "object") {
-      const obj = v as object;
-      if (seen.has(obj)) return undefined;
-      seen.add(obj);
+    const sorter = (_k: string, v: unknown) => {
+        if (v && typeof v === "object") {
+            const obj = v as object;
+            if (seen.has(obj)) return undefined;
+            seen.add(obj);
 
-      if (Array.isArray(v)) return v.map((x) => x);
+            if (Array.isArray(v)) return v.map((x) => x);
 
-      const entries = Object.entries(v as Record<string, unknown>).sort(
-        ([a], [b]) => a.localeCompare(b)
-      );
-      return Object.fromEntries(entries);
-    }
-    return v;
-  };
+            const entries = Object.entries(v as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
+            return Object.fromEntries(entries);
+        }
+        return v;
+    };
 
-  return JSON.stringify(value, sorter);
+    return JSON.stringify(value, sorter);
 }
 
-export type SamplesFilterFrom =
-  | "sampleStatus"
-  | "receiptId"
-  | "sampleTypeId"
-  | "sampleTypeName"
-  | "productType"
-  | "sampleStorageLoc";
+export type SamplesFilterFrom = "sampleStatus" | "receiptId" | "sampleTypeId" | "sampleTypeName" | "productType" | "sampleStorageLoc";
 
 export type SamplesFilterOtherFilter = {
-  filterFrom: SamplesFilterFrom;
-  filterValues: Array<string | number>;
+    filterFrom: SamplesFilterFrom;
+    filterValues: Array<string | number>;
 };
 
 export type SamplesFilterBody = {
-  filterFrom: SamplesFilterFrom;
-  textFilter: string | null;
-  otherFilters: SamplesFilterOtherFilter[];
-  limit: number;
+    filterFrom: SamplesFilterFrom;
+    textFilter: string | null;
+    otherFilters: SamplesFilterOtherFilter[];
+    limit: number;
 };
 
 export type SamplesFilterItem = {
-  filterValue: string;
-  count: number;
+    filterValue: string;
+    count: number;
 };
 
 export type SamplesFilterInput = {
-  body: SamplesFilterBody;
+    body: SamplesFilterBody;
 };
 
-export async function samplesFilter(
-  input: SamplesFilterInput
-): Promise<ApiResponse<SamplesFilterItem[]>> {
-  return api.post<SamplesFilterItem[]>("/v2/samples/filter", {
-    body: input.body,
-  });
+export async function samplesFilter(input: SamplesFilterInput): Promise<ApiResponse<SamplesFilterItem[]>> {
+    return api.post<SamplesFilterItem[]>("/v2/samples/filter", {
+        body: input.body,
+    });
 }
 
 export type SamplesDeleteBody = {
-  sampleId: string;
-  [key: string]: unknown;
+    sampleId: string;
+    [key: string]: unknown;
 };
 
 export type SamplesDeleteResult = {
-  sampleId?: string;
-  [key: string]: unknown;
+    sampleId?: string;
+    [key: string]: unknown;
 };
 
 export type SamplesDeleteInput = {
-  body: SamplesDeleteBody;
-  query?: Record<string, unknown>;
+    body: SamplesDeleteBody;
+    query?: Record<string, unknown>;
 };
 
-export async function samplesDelete(
-  input: SamplesDeleteInput
-): Promise<ApiResponse<SamplesDeleteResult>> {
-  return api.post<SamplesDeleteResult, SamplesDeleteBody>(
-    "/v2/samples/delete",
-    {
-      body: input.body,
-      query: input.query,
-    }
-  );
+export async function samplesDelete(input: SamplesDeleteInput): Promise<ApiResponse<SamplesDeleteResult>> {
+    return api.post<SamplesDeleteResult, SamplesDeleteBody>("/v2/samples/delete", {
+        body: input.body,
+        query: input.query,
+    });
 }
 
 export const samplesKeys = {
-  all: ["operations", "samples"] as const,
+    all: ["operations", "samples"] as const,
 
-  list: (input?: SamplesGetListInput) =>
-    [...samplesKeys.all, "list", stableKey(input ?? {})] as const,
+    list: (input?: SamplesGetListInput) => [...samplesKeys.all, "list", stableKey(input ?? {})] as const,
 
-  full: (input: SamplesGetFullInput) =>
-    [...samplesKeys.all, "full", input.sampleId] as const,
+    full: (input: SamplesGetFullInput) => [...samplesKeys.all, "full", input.sampleId] as const,
 
-  filter: (input: SamplesFilterInput) =>
-    [...samplesKeys.all, "filter", stableKey(input.body)] as const,
+    filter: (input: SamplesFilterInput) => [...samplesKeys.all, "filter", stableKey(input.body)] as const,
 
-  allPages: (input?: SamplesGetListInput) =>
-    [...samplesKeys.all, "allPages", stableKey(input ?? {})] as const,
+    allPages: (input?: SamplesGetListInput) => [...samplesKeys.all, "allPages", stableKey(input ?? {})] as const,
 } as const;
 
-export function useSamplesList(
-  input?: SamplesGetListInput,
-  opts?: { enabled?: boolean }
-) {
-  return useQuery({
-    queryKey: samplesKeys.list(input),
-    enabled: opts?.enabled ?? true,
-    placeholderData: keepPreviousData,
-    queryFn: async () =>
-      assertSuccessWithMeta(await samplesGetList(input ?? {})),
-  });
-}
-
-export function useSampleFull(
-  input: SamplesGetFullInput,
-  opts?: { enabled?: boolean }
-) {
-  return useQuery({
-    queryKey: samplesKeys.full(input),
-    enabled: (opts?.enabled ?? true) && Boolean(input.sampleId),
-    retry: false,
-    queryFn: async () => assertSuccess(await samplesGetFull(input)),
-  });
-}
-
-export function useSamplesFilter(
-  input: SamplesFilterInput,
-  opts?: { enabled?: boolean }
-) {
-  return useQuery({
-    queryKey: samplesKeys.filter(input),
-    enabled: opts?.enabled ?? true,
-    retry: false,
-    placeholderData: keepPreviousData,
-    queryFn: async () => assertSuccess(await samplesFilter(input)),
-  });
-}
-
-export async function samplesGetAllPages(
-  input: SamplesGetListInput = {}
-): Promise<ListResult<SampleListItem[]>> {
-  const first = await samplesGetList(input);
-  const firstRes = assertSuccessWithMeta(first);
-
-  const totalPages = firstRes.meta?.totalPages ?? 1;
-  const all: SampleListItem[] = Array.isArray(firstRes.data)
-    ? [...firstRes.data]
-    : [];
-
-  for (let p = 2; p <= totalPages; p += 1) {
-    const res = await samplesGetList({
-      query: { ...(input.query ?? {}), page: p },
-      sort: input.sort,
+export function useSamplesList(input?: SamplesGetListInput, opts?: { enabled?: boolean }) {
+    return useQuery({
+        queryKey: samplesKeys.list(input),
+        enabled: opts?.enabled ?? true,
+        placeholderData: keepPreviousData,
+        queryFn: async () => assertSuccessWithMeta(await samplesGetList(input ?? {})),
     });
-    const pageRes = assertSuccessWithMeta(res);
-    if (Array.isArray(pageRes.data)) all.push(...pageRes.data);
-  }
-
-  return { data: all, meta: firstRes.meta ?? null };
 }
 
-export function useSamplesAll(
-  input?: SamplesGetListInput,
-  opts?: { enabled?: boolean }
-) {
-  return useQuery({
-    queryKey: samplesKeys.allPages(input),
-    enabled: opts?.enabled ?? true,
-    retry: false,
-    queryFn: async () => samplesGetAllPages(input ?? {}),
-  });
+export function useSampleFull(input: SamplesGetFullInput, opts?: { enabled?: boolean }) {
+    return useQuery({
+        queryKey: samplesKeys.full(input),
+        enabled: (opts?.enabled ?? true) && Boolean(input.sampleId),
+        retry: false,
+        queryFn: async () => assertSuccess(await samplesGetFull(input)),
+    });
+}
+
+export function useSamplesProcessing(input?: SamplesGetListInput, opts?: { enabled?: boolean }) {
+    return useQuery({
+        queryKey: [...samplesKeys.list(input), "processing"],
+        enabled: opts?.enabled ?? true,
+        placeholderData: keepPreviousData,
+        queryFn: async () => assertSuccessWithMeta(await samplesGetProcessing(input ?? {})),
+    });
+}
+
+export function useSamplesFilter(input: SamplesFilterInput, opts?: { enabled?: boolean }) {
+    return useQuery({
+        queryKey: samplesKeys.filter(input),
+        enabled: opts?.enabled ?? true,
+        retry: false,
+        placeholderData: keepPreviousData,
+        queryFn: async () => assertSuccess(await samplesFilter(input)),
+    });
+}
+
+export async function samplesGetAllPages(input: SamplesGetListInput = {}): Promise<ListResult<SampleListItem[]>> {
+    const first = await samplesGetList(input);
+    const firstRes = assertSuccessWithMeta(first);
+
+    const totalPages = firstRes.meta?.totalPages ?? 1;
+    const all: SampleListItem[] = Array.isArray(firstRes.data) ? [...firstRes.data] : [];
+
+    for (let p = 2; p <= totalPages; p += 1) {
+        const res = await samplesGetList({
+            query: { ...(input.query ?? {}), page: p },
+            sort: input.sort,
+        });
+        const pageRes = assertSuccessWithMeta(res);
+        if (Array.isArray(pageRes.data)) all.push(...pageRes.data);
+    }
+
+    return { data: all, meta: firstRes.meta ?? null };
+}
+
+export function useSamplesAll(input?: SamplesGetListInput, opts?: { enabled?: boolean }) {
+    return useQuery({
+        queryKey: samplesKeys.allPages(input),
+        enabled: opts?.enabled ?? true,
+        retry: false,
+        queryFn: async () => samplesGetAllPages(input ?? {}),
+    });
 }
 
 async function invalidateSamplesLists(qc: ReturnType<typeof useQueryClient>) {
-  await qc.invalidateQueries({
-    queryKey: [...samplesKeys.all, "list"],
-    exact: false,
-    refetchType: "active",
-  });
+    await qc.invalidateQueries({
+        queryKey: [...samplesKeys.all, "list"],
+        exact: false,
+        refetchType: "active",
+    });
 
-  await qc.invalidateQueries({
-    queryKey: [...samplesKeys.all, "allPages"],
-    exact: false,
-    refetchType: "active",
-  });
+    await qc.invalidateQueries({
+        queryKey: [...samplesKeys.all, "allPages"],
+        exact: false,
+        refetchType: "active",
+    });
 }
 
 export function useCreateSample() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
+    const qc = useQueryClient();
+    const { t } = useTranslation();
 
-  return useMutation({
-    mutationFn: async (body: SamplesCreateBody) =>
-      assertSuccess(await samplesCreate(body)),
+    return useMutation({
+        mutationFn: async (body: SamplesCreateBody) => assertSuccess(await samplesCreate(body)),
 
-    onSuccess: async () => {
-      await invalidateSamplesLists(qc);
-      toast.success(t("reception.samples.createSuccess"));
-    },
-    onError: () => toast.error(t("common.toast.failed")),
-  });
+        onSuccess: async () => {
+            await invalidateSamplesLists(qc);
+            toast.success(t("reception.samples.createSuccess"));
+        },
+        onError: () => toast.error(t("common.toast.failed")),
+    });
 }
 
 export function useUpdateSample() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
+    const qc = useQueryClient();
+    const { t } = useTranslation();
 
-  return useMutation({
-    mutationFn: async (body: SamplesUpdateBody) =>
-      assertSuccess(await samplesUpdate(body)),
+    return useMutation({
+        mutationFn: async (body: SamplesUpdateBody) => assertSuccess(await samplesUpdate(body)),
 
-    onSuccess: async (updated) => {
-      const sampleId = (updated as { sampleId?: string }).sampleId;
+        onSuccess: async (updated) => {
+            const sampleId = (updated as { sampleId?: string }).sampleId;
 
-      if (typeof sampleId === "string" && sampleId) {
-        qc.setQueryData(samplesKeys.full({ sampleId }), updated);
-      }
+            if (typeof sampleId === "string" && sampleId) {
+                qc.setQueryData(samplesKeys.full({ sampleId }), updated);
+            }
 
-      await invalidateSamplesLists(qc);
-      toast.success(t("reception.samples.updateSuccess"));
-    },
+            await invalidateSamplesLists(qc);
+            toast.success(t("reception.samples.updateSuccess"));
+        },
 
-    onError: () => toast.error(t("reception.samples.updateError")),
-  });
+        onError: () => toast.error(t("reception.samples.updateError")),
+    });
 }
 
 export function useDeleteSample() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
+    const qc = useQueryClient();
+    const { t } = useTranslation();
 
-  return useMutation({
-    mutationFn: async (input: SamplesDeleteInput) =>
-      assertSuccess(await samplesDelete(input)),
+    return useMutation({
+        mutationFn: async (input: SamplesDeleteInput) => assertSuccess(await samplesDelete(input)),
 
-    onMutate: async (vars) => {
-      const sampleId = vars.body.sampleId?.trim() ?? "";
-      if (!sampleId) {
-        return { sampleId: "", snapshot: [] as Array<[unknown, unknown]> };
-      }
+        onMutate: async (vars) => {
+            const sampleId = vars.body.sampleId?.trim() ?? "";
+            if (!sampleId) {
+                return { sampleId: "", snapshot: [] as Array<[unknown, unknown]> };
+            }
 
-      await qc.cancelQueries({ queryKey: samplesKeys.all, exact: false });
+            await qc.cancelQueries({ queryKey: samplesKeys.all, exact: false });
 
-      const snapshot = qc.getQueriesData({
-        queryKey: samplesKeys.all,
-        exact: false,
-      });
+            const snapshot = qc.getQueriesData({
+                queryKey: samplesKeys.all,
+                exact: false,
+            });
 
-      qc.setQueriesData(
-        {
-          predicate: (q) => {
-            const k = q.queryKey;
-            return (
-              Array.isArray(k) &&
-              k[0] === "operations" &&
-              k[1] === "samples" &&
-              (k[2] === "list" || k[2] === "allPages")
+            qc.setQueriesData(
+                {
+                    predicate: (q) => {
+                        const k = q.queryKey;
+                        return Array.isArray(k) && k[0] === "operations" && k[1] === "samples" && (k[2] === "list" || k[2] === "allPages");
+                    },
+                },
+                (old) => removeSampleFromCachedList(old, sampleId),
             );
-          },
+
+            qc.removeQueries({
+                queryKey: [...samplesKeys.all, "full", sampleId],
+                exact: true,
+            });
+
+            return { sampleId, snapshot };
         },
-        (old) => removeSampleFromCachedList(old, sampleId)
-      );
 
-      qc.removeQueries({
-        queryKey: [...samplesKeys.all, "full", sampleId],
-        exact: true,
-      });
+        onError: (_err, _vars, ctx) => {
+            const snap = ctx as { snapshot?: Array<[unknown, unknown]> } | undefined;
 
-      return { sampleId, snapshot };
-    },
+            if (snap?.snapshot) {
+                for (const [key, data] of snap.snapshot) {
+                    if (Array.isArray(key)) qc.setQueryData(key, data);
+                }
+            }
 
-    onError: (_err, _vars, ctx) => {
-      const snap = ctx as { snapshot?: Array<[unknown, unknown]> } | undefined;
+            toast.error(t("common.toast.failed"));
+        },
 
-      if (snap?.snapshot) {
-        for (const [key, data] of snap.snapshot) {
-          if (Array.isArray(key)) qc.setQueryData(key, data);
-        }
-      }
+        onSuccess: () => {
+            toast.success(t("common.toast.deleted"));
+        },
 
-      toast.error(t("common.toast.failed"));
-    },
-
-    onSuccess: () => {
-      toast.success(t("common.toast.deleted"));
-    },
-
-    onSettled: async () => {
-      await invalidateSamplesLists(qc);
-    },
-  });
+        onSettled: async () => {
+            await invalidateSamplesLists(qc);
+        },
+    });
 }
 
 function removeSampleFromCachedList(old: unknown, sampleId: string): unknown {
-  if (
-    old &&
-    typeof old === "object" &&
-    "data" in (old as Record<string, unknown>)
-  ) {
-    const cur = old as { data: SampleListItem[]; meta?: unknown | null };
-    return {
-      ...cur,
-      data: (cur.data ?? []).filter((x) => x.sampleId !== sampleId),
-    };
-  }
-  if (Array.isArray(old)) {
-    return (old as SampleListItem[]).filter((x) => x.sampleId !== sampleId);
-  }
-  return old;
+    if (old && typeof old === "object" && "data" in (old as Record<string, unknown>)) {
+        const cur = old as { data: SampleListItem[]; meta?: unknown | null };
+        return {
+            ...cur,
+            data: (cur.data ?? []).filter((x) => x.sampleId !== sampleId),
+        };
+    }
+    if (Array.isArray(old)) {
+        return (old as SampleListItem[]).filter((x) => x.sampleId !== sampleId);
+    }
+    return old;
 }
